@@ -17,6 +17,7 @@ export interface UseBhashaLensOptions {
   baseUrl?: string;
   document?: Document;
   enabled?: boolean;
+  highlight?: boolean;
   maxSelectionChars?: number;
   minWordLength?: number;
   onError?: (error: unknown) => void;
@@ -31,11 +32,12 @@ const DEFAULT_API_BASE_URL = "http://localhost:8787";
 
 export function useBhashaLens(options: UseBhashaLensOptions = {}): void {
   const {
-    activation = "both",
+    activation = "selection",
     adapter,
     baseUrl = DEFAULT_API_BASE_URL,
     document: targetDocument,
     enabled = true,
+    highlight,
     maxSelectionChars,
     minWordLength,
     onError,
@@ -56,6 +58,7 @@ export function useBhashaLens(options: UseBhashaLensOptions = {}): void {
       activation,
       adapter: adapter ?? new BengaliAdapter(),
       document: doc,
+      highlight,
       maxSelectionChars,
       minWordLength,
       onError,
@@ -72,6 +75,7 @@ export function useBhashaLens(options: UseBhashaLensOptions = {}): void {
     adapter,
     baseUrl,
     enabled,
+    highlight,
     maxSelectionChars,
     minWordLength,
     onError,

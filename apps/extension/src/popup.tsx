@@ -1,9 +1,17 @@
 import { useDictionaryLookup } from "@bhashalens/react";
+import type { ActivationMode } from "@bhashalens/core";
 import { FormEvent, useEffect, useState } from "react";
 import "./popup.css";
 import { DEFAULT_SETTINGS, readExtensionSettings, writeExtensionSettings } from "./settings.js";
 
+const activationOptions: Array<{ label: string; value: ActivationMode }> = [
+  { label: "Select", value: "selection" },
+  { label: "Click", value: "click" },
+  { label: "Both", value: "both" }
+];
+
 function Popup() {
+  const [activation, setActivation] = useState<ActivationMode>(DEFAULT_SETTINGS.activation);
   const [enabled, setEnabled] = useState(DEFAULT_SETTINGS.enabled);
   const [apiBaseUrl, setApiBaseUrl] = useState(DEFAULT_SETTINGS.apiBaseUrl);
   const [saved, setSaved] = useState(false);
@@ -12,10 +20,17 @@ function Popup() {
 
   useEffect(() => {
     void readExtensionSettings().then((settings) => {
+      setActivation(settings.activation);
       setEnabled(settings.enabled);
       setApiBaseUrl(settings.apiBaseUrl);
     });
   }, []);
+
+  async function updateActivation(nextActivation: ActivationMode): Promise<void> {
+    setActivation(nextActivation);
+    await writeExtensionSettings({ activation: nextActivation });
+    setSaved(true);
+  }
 
   async function updateEnabled(nextEnabled: boolean): Promise<void> {
     setEnabled(nextEnabled);
@@ -46,6 +61,26 @@ function Popup() {
           <span />
         </label>
       </header>
+
+      <section className="section">
+        <div className="fieldHead">
+          <label>Trigger</label>
+          <span>{activation === "selection" ? "Best UX" : "Advanced"}</span>
+        </div>
+        <div className="segmented" role="group" aria-label="Lookup trigger mode">
+          {activationOptions.map((option) => (
+            <button
+              aria-pressed={activation === option.value}
+              className={activation === option.value ? "active" : ""}
+              key={option.value}
+              onClick={() => void updateActivation(option.value)}
+              type="button"
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </section>
 
       <section className="section">
         <form onSubmit={(event) => void saveEndpoint(event)}>
@@ -84,7 +119,7 @@ function Popup() {
         </form>
 
         <div className="result" aria-live="polite">
-          {status === "idle" ? <p>Click Bengali text on a page, or test the API here.</p> : null}
+          {status === "idle" ? <p>Select Bengali text on a page, or test the API here.</p> : null}
           {status === "empty" ? <p>No entry found for this word.</p> : null}
           {status === "error" ? <p className="error">{error}</p> : null}
           {status === "ready" && result?.entries[0] ? (

@@ -3,8 +3,13 @@ import { FloatingDictionaryPopup } from "./popup.js";
 import type {
   ActivationMode,
   DictionaryProvider,
+  ExternalLookupLink,
   LanguageAdapter,
+  LanguageCode,
   LookupCandidate,
+  LookupResponse,
+  MorphologyAnalysis,
+  MorphologyCandidate,
   PopupController,
   PopupLookupState,
   WordSpan
@@ -16,6 +21,7 @@ export interface BhashaLensOptions {
   document?: Document;
   maxSelectionChars?: number;
   minWordLength?: number;
+  highlight?: boolean;
   onError?: (error: unknown) => void;
   onLookupComplete?: (candidate: LookupCandidate, state: PopupLookupState) => void;
   onLookupStart?: (candidate: LookupCandidate) => void;
@@ -25,6 +31,8 @@ export interface BhashaLensOptions {
 
 const DEFAULT_MAX_SELECTION_CHARS = 64;
 const DEFAULT_MIN_WORD_LENGTH = 1;
+const CLICK_HIT_TEST_TOLERANCE_PX = 2;
+const HIGHLIGHT_Z_INDEX = "2147483646";
 
 function getWindow(doc: Document): Window | null {
   return doc.defaultView ?? null;
@@ -66,11 +74,90 @@ function isTextNode(node: Node): node is Text {
   return node.nodeType === Node.TEXT_NODE;
 }
 
+function rectContainsPoint(rect: DOMRect, x: number, y: number, tolerance = 0): boolean {
+  return (
+    x >= rect.left - tolerance &&
+    x <= rect.right + tolerance &&
+    y >= rect.top - tolerance &&
+    y <= rect.bottom + tolerance
+  );
+}
+
+function usableRectsFromRange(range: Range): DOMRect[] {
+  return Array.from(range.getClientRects()).filter((rect) => rect.width > 0 || rect.height > 0);
+}
+
+function createExternalLookupLinks(word: string): ExternalLookupLink[] {
+  const encoded = encodeURIComponent(word);
+  const searchQuery = encodeURIComponent(`${word} বাংলা অর্থ`);
+
+  return [
+    {
+      label: "Google",
+      url: `https://www.google.com/search?q=${searchQuery}`
+    },
+    {
+      label: "Wikipedia",
+      url: `https://bn.wikipedia.org/wiki/Special:Search?search=${encoded}`
+    },
+    {
+      label: "Translate",
+      url: `https://translate.google.com/?sl=bn&tl=en&text=${encoded}&op=translate`
+    }
+  ];
+}
+
+class RangeHighlighter {
+  private host?: HTMLDivElement;
+  private readonly doc: Document;
+
+  constructor(doc: Document) {
+    this.doc = doc;
+  }
+
+  clear(): void {
+    this.host?.remove();
+    this.host = undefined;
+  }
+
+  show(rects: DOMRect[]): void {
+    this.clear();
+
+    const usableRects = rects.filter((rect) => rect.width > 0 || rect.height > 0);
+    if (usableRects.length === 0) {
+      return;
+    }
+
+    const host = this.doc.createElement("div");
+    host.setAttribute("data-bhashalens-highlight", "");
+    host.style.pointerEvents = "none";
+    host.style.position = "fixed";
+    host.style.zIndex = HIGHLIGHT_Z_INDEX;
+
+    for (const rect of usableRects) {
+      const marker = this.doc.createElement("div");
+      marker.style.background = "rgba(214, 155, 69, 0.18)";
+      marker.style.borderBottom = "2px solid #d69b45";
+      marker.style.borderRadius = "3px";
+      marker.style.height = `${Math.max(2, Math.round(rect.height))}px`;
+      marker.style.left = `${Math.round(rect.left)}px`;
+      marker.style.position = "fixed";
+      marker.style.top = `${Math.round(rect.top)}px`;
+      marker.style.width = `${Math.round(rect.width)}px`;
+      host.append(marker);
+    }
+
+    this.doc.body.append(host);
+    this.host = host;
+  }
+}
+
 export class BhashaLens {
   private abortController?: AbortController;
   private readonly activation: ActivationMode;
   private readonly adapter: LanguageAdapter;
   private readonly doc: Document;
+  private readonly highlighter?: RangeHighlighter;
   private lastLookupKey?: string;
   private mounted = false;
   private readonly maxSelectionChars: number;
@@ -82,15 +169,16 @@ export class BhashaLens {
   private readonly provider: DictionaryProvider;
 
   constructor(options: BhashaLensOptions) {
-    this.activation = options.activation ?? "both";
+    this.activation = options.activation ?? "selection";
     this.adapter = options.adapter ?? bengaliAdapter;
     this.doc = options.document ?? document;
+    this.highlighter = options.highlight === false ? undefined : new RangeHighlighter(this.doc);
     this.maxSelectionChars = options.maxSelectionChars ?? DEFAULT_MAX_SELECTION_CHARS;
     this.minWordLength = options.minWordLength ?? DEFAULT_MIN_WORD_LENGTH;
     this.onError = options.onError;
     this.onLookupComplete = options.onLookupComplete;
     this.onLookupStart = options.onLookupStart;
-    this.popup = options.popup ?? new FloatingDictionaryPopup(this.doc);
+    this.popup = options.popup ?? new FloatingDictionaryPopup(this.doc, { onHide: () => this.highlighter?.clear() });
     this.provider = options.provider;
   }
 
@@ -106,6 +194,7 @@ export class BhashaLens {
     this.doc.removeEventListener("pointerup", this.handlePointerUp, true);
     win?.removeEventListener("scroll", this.handleScroll, true);
     this.abortController?.abort();
+    this.highlighter?.clear();
     this.popup.destroy();
     this.mounted = false;
   }
@@ -126,12 +215,16 @@ export class BhashaLens {
 
   async lookup(word: string): Promise<PopupLookupState> {
     const normalized = this.adapter.normalize(word);
-    const response = await this.provider.lookup(normalized, this.adapter.lang);
+    const result = await this.lookupWithFallbacks(normalized, this.adapter.lang);
 
     return {
+      externalLinks: createExternalLookupLinks(normalized),
+      lookupWord: result.lookupWord,
+      matchedCandidate: result.matchedCandidate,
+      morphology: result.morphology,
       normalized,
-      response,
-      status: response.entries.length > 0 ? "ready" : "empty",
+      response: result.response,
+      status: result.response.entries.length > 0 ? "ready" : "empty",
       word
     };
   }
@@ -152,12 +245,14 @@ export class BhashaLens {
       return null;
     }
 
-    const rect = firstUsableRect(selection.getRangeAt(0));
+    const selectionRange = selection.getRangeAt(0);
+    const rect = firstUsableRect(selectionRange);
     if (!rect) {
       return null;
     }
 
     return {
+      highlightRects: usableRectsFromRange(selectionRange),
       lang: this.adapter.lang,
       normalized: span.normalized,
       rect,
@@ -183,13 +278,15 @@ export class BhashaLens {
     wordRange.setEnd(textNode, span.end);
 
     const rect = firstUsableRect(wordRange);
+    const highlightRects = usableRectsFromRange(wordRange);
     wordRange.detach();
 
-    if (!rect) {
+    if (!rect || !highlightRects.some((item) => rectContainsPoint(item, event.clientX, event.clientY, CLICK_HIT_TEST_TOLERANCE_PX))) {
       return null;
     }
 
     return {
+      highlightRects,
       lang: this.adapter.lang,
       normalized: span.normalized,
       rect,
@@ -239,6 +336,7 @@ export class BhashaLens {
       return;
     }
 
+    this.highlighter?.clear();
     this.popup.hide();
   };
 
@@ -257,6 +355,7 @@ export class BhashaLens {
   };
 
   private readonly handleScroll = (): void => {
+    this.highlighter?.clear();
     this.popup.hide();
   };
 
@@ -272,24 +371,31 @@ export class BhashaLens {
     this.abortController = controller;
 
     const loadingState: PopupLookupState = {
+      externalLinks: createExternalLookupLinks(candidate.normalized),
+      morphology: this.adapter.analyzeMorphology?.(candidate.normalized),
       normalized: candidate.normalized,
       status: "loading",
       word: candidate.word
     };
 
     this.onLookupStart?.(candidate);
+    this.highlighter?.show(candidate.highlightRects.length > 0 ? candidate.highlightRects : [candidate.rect]);
     this.popup.show(candidate.rect, loadingState);
 
     try {
-      const response = await this.provider.lookup(candidate.normalized, candidate.lang, controller.signal);
+      const result = await this.lookupWithFallbacks(candidate.normalized, candidate.lang, controller.signal);
       if (this.lastLookupKey !== lookupKey) {
         return;
       }
 
       const nextState: PopupLookupState = {
+        externalLinks: createExternalLookupLinks(candidate.normalized),
+        lookupWord: result.lookupWord,
+        matchedCandidate: result.matchedCandidate,
+        morphology: result.morphology,
         normalized: candidate.normalized,
-        response,
-        status: response.entries.length > 0 ? "ready" : "empty",
+        response: result.response,
+        status: result.response.entries.length > 0 ? "ready" : "empty",
         word: candidate.word
       };
 
@@ -302,6 +408,8 @@ export class BhashaLens {
 
       const nextState: PopupLookupState = {
         error: error instanceof Error ? error.message : "Lookup failed",
+        externalLinks: createExternalLookupLinks(candidate.normalized),
+        morphology: this.adapter.analyzeMorphology?.(candidate.normalized),
         normalized: candidate.normalized,
         status: "error",
         word: candidate.word
@@ -311,5 +419,50 @@ export class BhashaLens {
       this.onError?.(error);
       this.onLookupComplete?.(candidate, nextState);
     }
+  }
+
+  private async lookupWithFallbacks(
+    word: string,
+    lang: LanguageCode,
+    signal?: AbortSignal
+  ): Promise<{
+    lookupWord: string;
+    matchedCandidate?: MorphologyCandidate;
+    morphology?: MorphologyAnalysis;
+    response: LookupResponse;
+  }> {
+    const morphology = this.adapter.analyzeMorphology?.(word);
+    const candidates = morphology?.candidates.length
+      ? morphology.candidates
+      : [
+          {
+            confidence: 1,
+            normalized: word,
+            reason: "exact" as const
+          }
+        ];
+
+    let firstResponse: LookupResponse | undefined;
+
+    for (const candidate of candidates) {
+      const response = await this.provider.lookup(candidate.normalized, lang, signal);
+      firstResponse ??= response;
+
+      if (response.entries.length > 0) {
+        return {
+          lookupWord: response.lookupWord ?? candidate.normalized,
+          matchedCandidate: response.matchedCandidate ?? candidate,
+          morphology: response.morphology ?? morphology,
+          response
+        };
+      }
+    }
+
+    return {
+      lookupWord: candidates[0]?.normalized ?? word,
+      matchedCandidate: firstResponse?.matchedCandidate ?? candidates[0],
+      morphology: firstResponse?.morphology ?? morphology,
+      response: firstResponse ?? (await this.provider.lookup(word, lang, signal))
+    };
   }
 }

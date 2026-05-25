@@ -285,5 +285,511 @@
     "partOfSpeech": "noun",
     "definition": "Time; yesterday or tomorrow depending on context.",
     "source": "seed"
+  },
+  {
+    "word": "আমি",
+    "transliteration": "ami",
+    "partOfSpeech": "pronoun",
+    "definition": "I.",
+    "source": "seed"
+  },
+  {
+    "word": "তুমি",
+    "transliteration": "tumi",
+    "partOfSpeech": "pronoun",
+    "definition": "You; informal singular.",
+    "source": "seed"
+  },
+  {
+    "word": "আপনি",
+    "transliteration": "apni",
+    "partOfSpeech": "pronoun",
+    "definition": "You; respectful singular or plural.",
+    "source": "seed"
+  },
+  {
+    "word": "সে",
+    "transliteration": "she",
+    "partOfSpeech": "pronoun",
+    "definition": "He; she; that person.",
+    "source": "seed"
+  },
+  {
+    "word": "আমরা",
+    "transliteration": "amra",
+    "partOfSpeech": "pronoun",
+    "definition": "We.",
+    "source": "seed"
+  },
+  {
+    "word": "তারা",
+    "transliteration": "tara",
+    "partOfSpeech": "pronoun",
+    "definition": "They.",
+    "source": "seed"
+  },
+  {
+    "word": "এটা",
+    "transliteration": "eta",
+    "partOfSpeech": "pronoun",
+    "definition": "This; this thing.",
+    "source": "seed"
+  },
+  {
+    "word": "সেটা",
+    "transliteration": "seta",
+    "partOfSpeech": "pronoun",
+    "definition": "That; that thing.",
+    "source": "seed"
+  },
+  {
+    "word": "কে",
+    "transliteration": "ke",
+    "partOfSpeech": "pronoun",
+    "definition": "Who.",
+    "source": "seed"
+  },
+  {
+    "word": "কি",
+    "transliteration": "ki",
+    "partOfSpeech": "pronoun",
+    "definition": "What; whether.",
+    "source": "seed"
+  },
+  {
+    "word": "কেন",
+    "transliteration": "keno",
+    "partOfSpeech": "adverb",
+    "definition": "Why.",
+    "source": "seed"
+  },
+  {
+    "word": "কখন",
+    "transliteration": "kokhon",
+    "partOfSpeech": "adverb",
+    "definition": "When.",
+    "source": "seed"
+  },
+  {
+    "word": "কোথায়",
+    "transliteration": "kothay",
+    "partOfSpeech": "adverb",
+    "definition": "Where.",
+    "source": "seed"
+  },
+  {
+    "word": "কেমন",
+    "transliteration": "kemon",
+    "partOfSpeech": "adverb",
+    "definition": "How; what kind of.",
+    "source": "seed"
+  },
+  {
+    "word": "এখানে",
+    "transliteration": "ekhane",
+    "partOfSpeech": "adverb",
+    "definition": "Here.",
+    "source": "seed"
+  },
+  {
+    "word": "সেখানে",
+    "transliteration": "sekhane",
+    "partOfSpeech": "adverb",
+    "definition": "There.",
+    "source": "seed"
+  },
+  {
+    "word": "হ্যাঁ",
+    "transliteration": "hyam",
+    "partOfSpeech": "interjection",
+    "definition": "Yes.",
+    "source": "seed"
+  },
+  {
+    "word": "না",
+    "transliteration": "na",
+    "partOfSpeech": "adverb",
+    "definition": "No; not.",
+    "source": "seed"
+  },
+  {
+    "word": "আর",
+    "transliteration": "ar",
+    "partOfSpeech": "conjunction",
+    "definition": "And; more; again depending on context.",
+    "source": "seed"
+  },
+  {
+    "word": "এবং",
+    "transliteration": "ebong",
+    "partOfSpeech": "conjunction",
+    "definition": "And.",
+    "source": "seed"
+  },
+  {
+    "word": "কিন্তু",
+    "transliteration": "kintu",
+    "partOfSpeech": "conjunction",
+    "definition": "But.",
+    "source": "seed"
+  },
+  {
+    "word": "যদি",
+    "transliteration": "jodi",
+    "partOfSpeech": "conjunction",
+    "definition": "If.",
+    "source": "seed"
+  },
+  {
+    "word": "কারণ",
+    "transliteration": "karon",
+    "partOfSpeech": "noun",
+    "definition": "Reason; cause.",
+    "source": "seed"
+  },
+  {
+    "word": "জন্য",
+    "transliteration": "jonno",
+    "partOfSpeech": "postposition",
+    "definition": "For; because of.",
+    "source": "seed"
+  },
+  {
+    "word": "সঙ্গে",
+    "transliteration": "shonge",
+    "partOfSpeech": "postposition",
+    "definition": "With; together with.",
+    "synonyms": ["সাথে"],
+    "source": "seed"
+  },
+  {
+    "word": "সাথে",
+    "transliteration": "sathe",
+    "partOfSpeech": "postposition",
+    "definition": "With; together with.",
+    "synonyms": ["সঙ্গে"],
+    "source": "seed"
+  },
+  {
+    "word": "মধ্যে",
+    "transliteration": "moddhe",
+    "partOfSpeech": "postposition",
+    "definition": "In; within; among.",
+    "source": "seed"
+  },
+  {
+    "word": "উপর",
+    "transliteration": "upor",
+    "partOfSpeech": "postposition",
+    "definition": "On; above; over.",
+    "source": "seed"
+  },
+  {
+    "word": "নিচে",
+    "transliteration": "niche",
+    "partOfSpeech": "postposition",
+    "definition": "Below; under.",
+    "source": "seed"
+  },
+  {
+    "word": "কাছে",
+    "transliteration": "kache",
+    "partOfSpeech": "postposition",
+    "definition": "Near; to; with a person.",
+    "source": "seed"
+  },
+  {
+    "word": "দূর",
+    "transliteration": "dur",
+    "partOfSpeech": "adjective",
+    "definition": "Far; distant.",
+    "source": "seed"
+  },
+  {
+    "word": "শহর",
+    "transliteration": "shohor",
+    "partOfSpeech": "noun",
+    "definition": "City; town.",
+    "source": "seed"
+  },
+  {
+    "word": "গ্রাম",
+    "transliteration": "gram",
+    "partOfSpeech": "noun",
+    "definition": "Village.",
+    "source": "seed"
+  },
+  {
+    "word": "দেশ",
+    "transliteration": "desh",
+    "partOfSpeech": "noun",
+    "definition": "Country; homeland.",
+    "source": "seed"
+  },
+  {
+    "word": "মাটি",
+    "transliteration": "mati",
+    "partOfSpeech": "noun",
+    "definition": "Soil; earth; clay.",
+    "source": "seed"
+  },
+  {
+    "word": "পথ",
+    "transliteration": "poth",
+    "partOfSpeech": "noun",
+    "definition": "Path; road; way.",
+    "source": "seed"
+  },
+  {
+    "word": "হাত",
+    "transliteration": "hat",
+    "partOfSpeech": "noun",
+    "definition": "Hand; arm.",
+    "source": "seed"
+  },
+  {
+    "word": "মাথা",
+    "transliteration": "matha",
+    "partOfSpeech": "noun",
+    "definition": "Head.",
+    "source": "seed"
+  },
+  {
+    "word": "মন",
+    "transliteration": "mon",
+    "partOfSpeech": "noun",
+    "definition": "Mind; heart; feeling.",
+    "source": "seed"
+  },
+  {
+    "word": "গান",
+    "transliteration": "gan",
+    "partOfSpeech": "noun",
+    "definition": "Song.",
+    "source": "seed"
+  },
+  {
+    "word": "কাজ",
+    "transliteration": "kaj",
+    "partOfSpeech": "noun",
+    "definition": "Work; task.",
+    "source": "seed"
+  },
+  {
+    "word": "স্কুল",
+    "transliteration": "school",
+    "partOfSpeech": "noun",
+    "definition": "School.",
+    "source": "seed"
+  },
+  {
+    "word": "শিক্ষক",
+    "transliteration": "shikkhok",
+    "partOfSpeech": "noun",
+    "definition": "Teacher.",
+    "source": "seed"
+  },
+  {
+    "word": "ছাত্র",
+    "transliteration": "chhatro",
+    "partOfSpeech": "noun",
+    "definition": "Student; male student.",
+    "source": "seed"
+  },
+  {
+    "word": "ছাত্রী",
+    "transliteration": "chhatri",
+    "partOfSpeech": "noun",
+    "definition": "Female student.",
+    "source": "seed"
+  },
+  {
+    "word": "বন্ধু",
+    "transliteration": "bondhu",
+    "partOfSpeech": "noun",
+    "definition": "Friend.",
+    "source": "seed"
+  },
+  {
+    "word": "শিশু",
+    "transliteration": "shishu",
+    "partOfSpeech": "noun",
+    "definition": "Child; infant.",
+    "source": "seed"
+  },
+  {
+    "word": "মেয়ে",
+    "transliteration": "meye",
+    "partOfSpeech": "noun",
+    "definition": "Girl; daughter.",
+    "source": "seed"
+  },
+  {
+    "word": "ছেলে",
+    "transliteration": "chele",
+    "partOfSpeech": "noun",
+    "definition": "Boy; son.",
+    "source": "seed"
+  },
+  {
+    "word": "খাদ্য",
+    "transliteration": "khaddo",
+    "partOfSpeech": "noun",
+    "definition": "Food.",
+    "source": "seed"
+  },
+  {
+    "word": "ফল",
+    "transliteration": "fol",
+    "partOfSpeech": "noun",
+    "definition": "Fruit; result.",
+    "source": "seed"
+  },
+  {
+    "word": "মাছ",
+    "transliteration": "machh",
+    "partOfSpeech": "noun",
+    "definition": "Fish.",
+    "source": "seed"
+  },
+  {
+    "word": "ভাত",
+    "transliteration": "bhat",
+    "partOfSpeech": "noun",
+    "definition": "Cooked rice.",
+    "source": "seed"
+  },
+  {
+    "word": "দুধ",
+    "transliteration": "dudh",
+    "partOfSpeech": "noun",
+    "definition": "Milk.",
+    "source": "seed"
+  },
+  {
+    "word": "চা",
+    "transliteration": "cha",
+    "partOfSpeech": "noun",
+    "definition": "Tea.",
+    "source": "seed"
+  },
+  {
+    "word": "লবণ",
+    "transliteration": "lobon",
+    "partOfSpeech": "noun",
+    "definition": "Salt.",
+    "source": "seed"
+  },
+  {
+    "word": "সুখ",
+    "transliteration": "sukh",
+    "partOfSpeech": "noun",
+    "definition": "Happiness; comfort.",
+    "source": "seed"
+  },
+  {
+    "word": "দুঃখ",
+    "transliteration": "dukkho",
+    "partOfSpeech": "noun",
+    "definition": "Sorrow; sadness.",
+    "source": "seed"
+  },
+  {
+    "word": "রাগ",
+    "transliteration": "rag",
+    "partOfSpeech": "noun",
+    "definition": "Anger; also a melodic mode in music.",
+    "source": "seed"
+  },
+  {
+    "word": "আশা",
+    "transliteration": "asha",
+    "partOfSpeech": "noun",
+    "definition": "Hope; expectation.",
+    "source": "seed"
+  },
+  {
+    "word": "প্রশ্ন",
+    "transliteration": "proshno",
+    "partOfSpeech": "noun",
+    "definition": "Question.",
+    "source": "seed"
+  },
+  {
+    "word": "উত্তর",
+    "transliteration": "uttor",
+    "partOfSpeech": "noun",
+    "definition": "Answer; north depending on context.",
+    "source": "seed"
+  },
+  {
+    "word": "সময়",
+    "transliteration": "shomoy",
+    "partOfSpeech": "noun",
+    "definition": "Time.",
+    "source": "seed"
+  },
+  {
+    "word": "সকাল",
+    "transliteration": "shokal",
+    "partOfSpeech": "noun",
+    "definition": "Morning.",
+    "source": "seed"
+  },
+  {
+    "word": "বিকেল",
+    "transliteration": "bikel",
+    "partOfSpeech": "noun",
+    "definition": "Afternoon; early evening.",
+    "source": "seed"
+  },
+  {
+    "word": "চেষ্টা",
+    "transliteration": "cheshta",
+    "partOfSpeech": "noun",
+    "definition": "Effort; attempt.",
+    "source": "seed"
+  },
+  {
+    "word": "শুরু",
+    "transliteration": "shuru",
+    "partOfSpeech": "noun",
+    "definition": "Beginning; start.",
+    "source": "seed"
+  },
+  {
+    "word": "শেষ",
+    "transliteration": "shesh",
+    "partOfSpeech": "noun",
+    "definition": "End; final part.",
+    "source": "seed"
+  },
+  {
+    "word": "সহজ",
+    "transliteration": "shohoj",
+    "partOfSpeech": "adjective",
+    "definition": "Easy; simple.",
+    "source": "seed"
+  },
+  {
+    "word": "কঠিন",
+    "transliteration": "kothin",
+    "partOfSpeech": "adjective",
+    "definition": "Difficult; hard.",
+    "source": "seed"
+  },
+  {
+    "word": "সত্য",
+    "transliteration": "shotto",
+    "partOfSpeech": "noun",
+    "definition": "Truth; true.",
+    "source": "seed"
+  },
+  {
+    "word": "মিথ্যা",
+    "transliteration": "mithya",
+    "partOfSpeech": "noun",
+    "definition": "Falsehood; lie; false.",
+    "source": "seed"
   }
 ]

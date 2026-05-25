@@ -18,4 +18,10 @@ describe("BengaliAdapter", () => {
     expect(span?.normalized).toBe("বাংলা");
     expect(span?.start).toBe(3);
   });
+
+  it("generates conservative morphology fallback candidates", () => {
+    const analysis = adapter.analyzeMorphology("বাংলাদের");
+    expect(analysis.complexity).toBe("inflected");
+    expect(analysis.candidates.some((candidate) => candidate.normalized === "বাংলা")).toBe(true);
+  });
 });

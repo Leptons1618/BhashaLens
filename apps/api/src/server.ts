@@ -1,4 +1,10 @@
-import { BengaliAdapter, type DictionaryEntry, type LanguageAdapter, type LanguageCode } from "@bhashalens/core";
+import {
+  BengaliAdapter,
+  type DictionaryEntry,
+  type LanguageAdapter,
+  type LanguageCode,
+  type MorphologyCandidate
+} from "@bhashalens/core";
 import cors from "@fastify/cors";
 import { and, eq } from "drizzle-orm";
 import Fastify, { type FastifyInstance } from "fastify";
@@ -58,6 +64,15 @@ function readText(value: string | undefined): string | null {
   return text && text.length > 0 ? text : null;
 }
 
+function lookupRows(dbContext: DbContext, lang: LanguageCode, normalized: string) {
+  return dbContext.db
+    .select()
+    .from(dictionaryEntries)
+    .where(and(eq(dictionaryEntries.lang, lang), eq(dictionaryEntries.normalized, normalized)))
+    .limit(10)
+    .all();
+}
+
 export async function createServer(options: CreateServerOptions = {}): Promise<FastifyInstance> {
   const ownsDb = !options.dbContext;
   const dbContext = options.dbContext ?? createDbContext();
@@ -92,9 +107,22 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
     }
 
     const normalized = adapter.normalize(word);
+    const morphology = adapter.analyzeMorphology?.(normalized);
+    const candidates = morphology?.candidates.length
+      ? morphology.candidates
+      : [
+          {
+            confidence: 1,
+            normalized,
+            reason: "exact" as const
+          }
+        ];
     const emptyResponse = {
       entries: [],
       found: false,
+      lookupWord: normalized,
+      matchedCandidate: candidates[0],
+      morphology,
       query: {
         lang,
         normalized,
@@ -109,12 +137,16 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
       };
     }
 
-    const rows = dbContext.db
-      .select()
-      .from(dictionaryEntries)
-      .where(and(eq(dictionaryEntries.lang, lang), eq(dictionaryEntries.normalized, normalized)))
-      .limit(10)
-      .all();
+    let matchedCandidate: MorphologyCandidate | undefined;
+    let rows: ReturnType<typeof lookupRows> = [];
+
+    for (const candidate of candidates) {
+      rows = lookupRows(dbContext, lang, candidate.normalized);
+      if (rows.length > 0) {
+        matchedCandidate = candidate;
+        break;
+      }
+    }
 
     const entries = rows.map(mapRow);
 
@@ -123,6 +155,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
       entries,
       found: entries.length > 0,
       latencyMs: Math.round(performance.now() - started),
+      lookupWord: matchedCandidate?.normalized ?? normalized,
+      matchedCandidate: matchedCandidate ?? candidates[0],
+      morphology,
       query: {
         lang,
         normalized,

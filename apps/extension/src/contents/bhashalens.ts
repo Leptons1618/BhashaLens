@@ -24,9 +24,10 @@ async function startLens(): Promise<void> {
   }
 
   lens = new BhashaLens({
-    activation: "both",
+    activation: settings.activation,
     adapter: new BengaliAdapter(),
     document,
+    highlight: true,
     maxSelectionChars: 48,
     provider: new RestDictionaryProvider({
       baseUrl: settings.apiBaseUrl,
@@ -51,7 +52,7 @@ if (typeof chrome !== "undefined" && chrome.storage?.onChanged) {
       return;
     }
 
-    if (changes.enabled || changes.apiBaseUrl) {
+    if (changes.enabled || changes.apiBaseUrl || changes.activation) {
       void startLens();
     }
   });

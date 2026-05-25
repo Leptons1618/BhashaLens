@@ -3,6 +3,10 @@ import type { PopupController, PopupLookupState } from "./types.js";
 
 const POPUP_Z_INDEX = "2147483647";
 
+export interface FloatingDictionaryPopupOptions {
+  onHide?: () => void;
+}
+
 function escapeHtml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -44,6 +48,39 @@ function renderEntries(state: PopupLookupState): string {
       `;
     })
     .join("");
+}
+
+function renderMorphology(state: PopupLookupState): string {
+  const morphology = state.morphology;
+  if (!morphology) {
+    return "";
+  }
+
+  const matched = state.matchedCandidate;
+  const matchedText = matched && matched.reason !== "exact" ? `Root match: ${escapeHtml(matched.normalized)}` : "Exact form";
+  const suffixText = matched?.suffix ? ` · suffix ${escapeHtml(matched.suffix)}` : "";
+
+  return `
+    <div class="bl-morph">
+      <span>${escapeHtml(morphology.complexity)}</span>
+      <span>score ${escapeHtml(String(morphology.score))}</span>
+      <span>${matchedText}${suffixText}</span>
+    </div>
+  `;
+}
+
+function renderExternalLinks(state: PopupLookupState): string {
+  if (!state.externalLinks?.length) {
+    return "";
+  }
+
+  return `
+    <nav class="bl-links" aria-label="External lookups">
+      ${state.externalLinks
+        .map((link) => `<a href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(link.label)}</a>`)
+        .join("")}
+    </nav>
+  `;
 }
 
 function template(state: PopupLookupState): string {
@@ -117,6 +154,26 @@ function template(state: PopupLookupState): string {
         padding: 11px 14px 13px;
       }
 
+      .bl-morph {
+        align-items: center;
+        border-bottom: 1px solid rgba(45, 31, 19, 0.1);
+        color: #6e4f38;
+        display: flex;
+        flex-wrap: wrap;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        font-size: 11px;
+        gap: 6px;
+        line-height: 1.25;
+        margin: -1px 0 10px;
+        padding-bottom: 9px;
+      }
+
+      .bl-morph span {
+        background: rgba(39, 116, 93, 0.08);
+        border-radius: 6px;
+        padding: 4px 6px;
+      }
+
       .bl-entry + .bl-entry {
         border-top: 1px solid rgba(45, 31, 19, 0.1);
         margin-top: 10px;
@@ -162,6 +219,31 @@ function template(state: PopupLookupState): string {
       .bl-error {
         color: #9f2d20;
       }
+
+      .bl-links {
+        border-top: 1px solid rgba(45, 31, 19, 0.1);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        margin-top: 11px;
+        padding-top: 10px;
+      }
+
+      .bl-links a {
+        background: rgba(39, 116, 93, 0.1);
+        border-radius: 6px;
+        color: #245f4d;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1;
+        padding: 7px 8px;
+        text-decoration: none;
+      }
+
+      .bl-links a:hover {
+        background: rgba(39, 116, 93, 0.16);
+      }
     </style>
     <section class="bl-shell" role="dialog" aria-label="BhashaLens dictionary result">
       <header class="bl-head">
@@ -171,7 +253,11 @@ function template(state: PopupLookupState): string {
         </div>
         <button class="bl-close" type="button" aria-label="Close dictionary popup">×</button>
       </header>
-      <div class="bl-body">${renderEntries(state)}</div>
+      <div class="bl-body">
+        ${renderMorphology(state)}
+        ${renderEntries(state)}
+        ${renderExternalLinks(state)}
+      </div>
     </section>
   `;
 }
@@ -181,10 +267,12 @@ export class FloatingDictionaryPopup implements PopupController {
   private readonly doc: Document;
   private host?: HTMLDivElement;
   private lastAnchor?: DOMRect;
+  private readonly onHide?: () => void;
   private shadow?: ShadowRoot;
 
-  constructor(doc: Document = document) {
+  constructor(doc: Document = document, options: FloatingDictionaryPopupOptions = {}) {
     this.doc = doc;
+    this.onHide = options.onHide;
   }
 
   contains(node: Node): boolean {
@@ -206,6 +294,7 @@ export class FloatingDictionaryPopup implements PopupController {
     if (this.host) {
       this.host.hidden = true;
     }
+    this.onHide?.();
   }
 
   show(anchor: DOMRect, state: PopupLookupState): void {

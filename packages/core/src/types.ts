@@ -12,7 +12,23 @@ export interface WordSpan {
   text: string;
 }
 
+export interface MorphologyCandidate {
+  confidence: number;
+  normalized: string;
+  reason: "exact" | "suffix-strip";
+  suffix?: string;
+}
+
+export interface MorphologyAnalysis {
+  candidates: MorphologyCandidate[];
+  complexity: "simple" | "inflected" | "compound" | "unknown";
+  notes: string[];
+  score: number;
+  surface: string;
+}
+
 export interface LanguageAdapter {
+  analyzeMorphology?(text: string): MorphologyAnalysis;
   detect(text: string): boolean;
   extractWordAt(text: string, offset: number): WordSpan | null;
   lang: LanguageCode;
@@ -42,6 +58,9 @@ export interface LookupResponse {
   entries: DictionaryEntry[];
   found: boolean;
   latencyMs?: number;
+  lookupWord?: string;
+  matchedCandidate?: MorphologyCandidate;
+  morphology?: MorphologyAnalysis;
   query: LookupQuery;
 }
 
@@ -49,8 +68,17 @@ export interface DictionaryProvider {
   lookup(word: string, lang?: LanguageCode, signal?: AbortSignal): Promise<LookupResponse>;
 }
 
+export interface ExternalLookupLink {
+  label: string;
+  url: string;
+}
+
 export interface PopupLookupState {
   error?: string;
+  externalLinks?: ExternalLookupLink[];
+  lookupWord?: string;
+  matchedCandidate?: MorphologyCandidate;
+  morphology?: MorphologyAnalysis;
   normalized: string;
   response?: LookupResponse;
   status: LookupStateStatus;
@@ -66,6 +94,7 @@ export interface PopupController {
 }
 
 export interface LookupCandidate {
+  highlightRects: DOMRect[];
   lang: LanguageCode;
   normalized: string;
   rect: DOMRect;
