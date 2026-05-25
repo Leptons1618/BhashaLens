@@ -1,0 +1,289 @@
+[
+  {
+    "word": "বাংলা",
+    "transliteration": "bangla",
+    "partOfSpeech": "noun",
+    "definition": "The Bengali language; something belonging to Bengal.",
+    "synonyms": ["বাঙলা"],
+    "source": "seed"
+  },
+  {
+    "word": "ভাষা",
+    "transliteration": "bhasha",
+    "partOfSpeech": "noun",
+    "definition": "Language; a system of spoken or written expression.",
+    "source": "seed"
+  },
+  {
+    "word": "ভালো",
+    "transliteration": "bhalo",
+    "partOfSpeech": "adjective",
+    "definition": "Good; pleasant; well.",
+    "source": "seed"
+  },
+  {
+    "word": "মানুষ",
+    "transliteration": "manush",
+    "partOfSpeech": "noun",
+    "definition": "A human being; person.",
+    "source": "seed"
+  },
+  {
+    "word": "জল",
+    "transliteration": "jal",
+    "partOfSpeech": "noun",
+    "definition": "Water.",
+    "synonyms": ["পানি"],
+    "source": "seed"
+  },
+  {
+    "word": "পানি",
+    "transliteration": "pani",
+    "partOfSpeech": "noun",
+    "definition": "Water.",
+    "synonyms": ["জল"],
+    "source": "seed"
+  },
+  {
+    "word": "আগুন",
+    "transliteration": "agun",
+    "partOfSpeech": "noun",
+    "definition": "Fire.",
+    "source": "seed"
+  },
+  {
+    "word": "বই",
+    "transliteration": "boi",
+    "partOfSpeech": "noun",
+    "definition": "Book.",
+    "source": "seed"
+  },
+  {
+    "word": "ঘর",
+    "transliteration": "ghor",
+    "partOfSpeech": "noun",
+    "definition": "House; room; home.",
+    "synonyms": ["বাড়ি"],
+    "source": "seed"
+  },
+  {
+    "word": "বাড়ি",
+    "transliteration": "bari",
+    "partOfSpeech": "noun",
+    "definition": "Home; house.",
+    "synonyms": ["ঘর"],
+    "source": "seed"
+  },
+  {
+    "word": "মা",
+    "transliteration": "ma",
+    "partOfSpeech": "noun",
+    "definition": "Mother.",
+    "source": "seed"
+  },
+  {
+    "word": "বাবা",
+    "transliteration": "baba",
+    "partOfSpeech": "noun",
+    "definition": "Father.",
+    "source": "seed"
+  },
+  {
+    "word": "প্রেম",
+    "transliteration": "prem",
+    "partOfSpeech": "noun",
+    "definition": "Love; affection.",
+    "synonyms": ["ভালোবাসা"],
+    "source": "seed"
+  },
+  {
+    "word": "ভালোবাসা",
+    "transliteration": "bhalobasha",
+    "partOfSpeech": "noun",
+    "definition": "Love; deep affection.",
+    "synonyms": ["প্রেম"],
+    "source": "seed"
+  },
+  {
+    "word": "আকাশ",
+    "transliteration": "akash",
+    "partOfSpeech": "noun",
+    "definition": "Sky.",
+    "source": "seed"
+  },
+  {
+    "word": "নদী",
+    "transliteration": "nodi",
+    "partOfSpeech": "noun",
+    "definition": "River.",
+    "source": "seed"
+  },
+  {
+    "word": "আলো",
+    "transliteration": "alo",
+    "partOfSpeech": "noun",
+    "definition": "Light; brightness.",
+    "source": "seed"
+  },
+  {
+    "word": "রাত",
+    "transliteration": "raat",
+    "partOfSpeech": "noun",
+    "definition": "Night.",
+    "source": "seed"
+  },
+  {
+    "word": "দিন",
+    "transliteration": "din",
+    "partOfSpeech": "noun",
+    "definition": "Day.",
+    "source": "seed"
+  },
+  {
+    "word": "শব্দ",
+    "transliteration": "shobdo",
+    "partOfSpeech": "noun",
+    "definition": "Word; sound.",
+    "source": "seed"
+  },
+  {
+    "word": "অর্থ",
+    "transliteration": "ortho",
+    "partOfSpeech": "noun",
+    "definition": "Meaning; sense; money depending on context.",
+    "source": "seed"
+  },
+  {
+    "word": "চোখ",
+    "transliteration": "chokh",
+    "partOfSpeech": "noun",
+    "definition": "Eye.",
+    "source": "seed"
+  },
+  {
+    "word": "লেন্স",
+    "transliteration": "lens",
+    "partOfSpeech": "noun",
+    "definition": "Lens; an optical element used for focusing or viewing.",
+    "source": "seed"
+  },
+  {
+    "word": "দেখা",
+    "transliteration": "dekha",
+    "partOfSpeech": "verb",
+    "definition": "To see; to look at.",
+    "source": "seed"
+  },
+  {
+    "word": "শেখা",
+    "transliteration": "shekha",
+    "partOfSpeech": "verb",
+    "definition": "To learn.",
+    "source": "seed"
+  },
+  {
+    "word": "পড়া",
+    "transliteration": "pora",
+    "partOfSpeech": "verb",
+    "definition": "To read; to study; also to fall depending on context.",
+    "source": "seed"
+  },
+  {
+    "word": "লেখা",
+    "transliteration": "lekha",
+    "partOfSpeech": "verb",
+    "definition": "To write; writing.",
+    "source": "seed"
+  },
+  {
+    "word": "খাওয়া",
+    "transliteration": "khawa",
+    "partOfSpeech": "verb",
+    "definition": "To eat.",
+    "source": "seed"
+  },
+  {
+    "word": "যাওয়া",
+    "transliteration": "jaoa",
+    "partOfSpeech": "verb",
+    "definition": "To go.",
+    "source": "seed"
+  },
+  {
+    "word": "আসা",
+    "transliteration": "asha",
+    "partOfSpeech": "verb",
+    "definition": "To come.",
+    "source": "seed"
+  },
+  {
+    "word": "কথা",
+    "transliteration": "kotha",
+    "partOfSpeech": "noun",
+    "definition": "Speech; words; matter; story depending on context.",
+    "source": "seed"
+  },
+  {
+    "word": "ছোট",
+    "transliteration": "chhoto",
+    "partOfSpeech": "adjective",
+    "definition": "Small; little.",
+    "source": "seed"
+  },
+  {
+    "word": "বড়",
+    "transliteration": "boro",
+    "partOfSpeech": "adjective",
+    "definition": "Big; large; elder.",
+    "source": "seed"
+  },
+  {
+    "word": "নতুন",
+    "transliteration": "notun",
+    "partOfSpeech": "adjective",
+    "definition": "New.",
+    "source": "seed"
+  },
+  {
+    "word": "পুরোনো",
+    "transliteration": "purono",
+    "partOfSpeech": "adjective",
+    "definition": "Old; former.",
+    "source": "seed"
+  },
+  {
+    "word": "সুন্দর",
+    "transliteration": "shundor",
+    "partOfSpeech": "adjective",
+    "definition": "Beautiful; pleasing.",
+    "source": "seed"
+  },
+  {
+    "word": "দ্রুত",
+    "transliteration": "druto",
+    "partOfSpeech": "adjective",
+    "definition": "Fast; quick.",
+    "source": "seed"
+  },
+  {
+    "word": "ধীরে",
+    "transliteration": "dhire",
+    "partOfSpeech": "adverb",
+    "definition": "Slowly; gently.",
+    "source": "seed"
+  },
+  {
+    "word": "আজ",
+    "transliteration": "aj",
+    "partOfSpeech": "adverb",
+    "definition": "Today.",
+    "source": "seed"
+  },
+  {
+    "word": "কাল",
+    "transliteration": "kal",
+    "partOfSpeech": "noun",
+    "definition": "Time; yesterday or tomorrow depending on context.",
+    "source": "seed"
+  }
+]

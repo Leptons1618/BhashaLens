@@ -1,0 +1,10 @@
+{
+  "name": "@bhashalens/bn-dictionary",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Seed Bengali dictionary entries for BhashaLens.",
+  "type": "module",
+  "exports": {
+    "./entries.json": "./entries.json"
+  }
+}

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="BhashaLens icon">
+  <rect width="512" height="512" rx="96" fill="#fffaf0"/>
+  <circle cx="256" cy="256" r="162" fill="#27745d"/>
+  <circle cx="256" cy="256" r="104" fill="#fffaf0"/>
+  <circle cx="256" cy="256" r="62" fill="#271b12"/>
+  <path d="M123 384c58-46 111-68 161-66 38 1 72 16 105 45" fill="none" stroke="#d69b45" stroke-width="34" stroke-linecap="round"/>
+  <text x="256" y="293" fill="#fffaf0" font-family="serif" font-size="104" font-weight="700" text-anchor="middle">ব</text>
+</svg>

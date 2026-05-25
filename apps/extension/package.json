@@ -1,0 +1,35 @@
+{
+  "name": "@bhashalens/extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "BhashaLens browser extension.",
+  "type": "module",
+  "scripts": {
+    "build": "plasmo build",
+    "dev": "plasmo dev",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@bhashalens/core": "workspace:*",
+    "@bhashalens/react": "workspace:*",
+    "@plasmohq/storage": "^1.13.0",
+    "plasmo": "^0.90.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.287",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "manifest": {
+    "name": "BhashaLens",
+    "description": "Inline Bengali dictionary lookups on any website.",
+    "permissions": ["storage"],
+    "host_permissions": ["<all_urls>"]
+  }
+}

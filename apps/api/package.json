@@ -1,0 +1,32 @@
+{
+  "name": "@bhashalens/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Fastify lookup API for BhashaLens.",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "db:push": "drizzle-kit push",
+    "dev": "tsx watch src/index.ts",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "seed": "tsx src/db/seed.ts",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@bhashalens/core": "workspace:*",
+    "@fastify/cors": "^10.0.2",
+    "better-sqlite3": "^11.7.0",
+    "drizzle-orm": "^0.38.4",
+    "fastify": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.2",
+    "drizzle-kit": "^0.30.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
