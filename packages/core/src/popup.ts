@@ -32,17 +32,27 @@ function renderEntries(state: PopupLookupState): string {
   return state.response.entries
     .slice(0, 3)
     .map((entry) => {
+      const meta = [entry.transliteration, entry.ipa, entry.partOfSpeech]
+        .filter((value): value is string => Boolean(value && value.trim()))
+        .map((value) => `<span>${escapeHtml(value)}</span>`)
+        .join("");
+
+      const examples = entry.examples?.length
+        ? `<ul class="bl-examples">${entry.examples
+            .slice(0, 2)
+            .map((example) => `<li>${escapeHtml(example)}</li>`)
+            .join("")}</ul>`
+        : "";
+
       const synonyms = entry.synonyms?.length
         ? `<div class="bl-synonyms">${entry.synonyms.map(escapeHtml).join(", ")}</div>`
         : "";
 
       return `
         <article class="bl-entry">
-          <div class="bl-entry-meta">
-            <span>${escapeHtml(entry.transliteration)}</span>
-            <span>${escapeHtml(entry.partOfSpeech)}</span>
-          </div>
+          <div class="bl-entry-meta">${meta}</div>
           <p>${escapeHtml(entry.definition)}</p>
+          ${examples}
           ${synonyms}
         </article>
       `;
@@ -210,6 +220,22 @@ function template(state: PopupLookupState): string {
       .bl-synonyms {
         color: #765c45;
         margin-top: 6px;
+      }
+
+      .bl-examples {
+        color: #4a3a2c;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        font-size: 12px;
+        line-height: 1.4;
+        list-style: none;
+        margin: 7px 0 0;
+        padding: 0;
+      }
+
+      .bl-examples li {
+        border-left: 2px solid rgba(39, 116, 93, 0.3);
+        margin-top: 5px;
+        padding-left: 8px;
       }
 
       .bl-status {

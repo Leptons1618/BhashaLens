@@ -26,13 +26,20 @@ pnpm --filter @bhashalens/extension dev
 
 The API defaults to `http://localhost:8787`. Load the Plasmo extension dev build in Chromium, then select Bengali text on any website. The extension popup can switch the trigger between `Select`, `Click`, and `Both`.
 
-For larger dictionaries:
+For the full dictionary, reproduce the Bengali Wiktextract snapshot from the
+source registry (it is intentionally not committed):
 
 ```bash
 pnpm --filter @bhashalens/api migrate
-pnpm --filter @bhashalens/api import:dictionary -- ../../data/bn-dictionary/entries.json --replace --source seed
-pnpm --filter @bhashalens/api import:dictionary -- ../../downloads/bn-wiktextract.jsonl --source wiktextract
+pnpm --filter @bhashalens/api fetch:source wiktextract        # downloads ~36 MB Kaikki extract + manifest
+pnpm --filter @bhashalens/api seed                            # curated starter entries
+pnpm --filter @bhashalens/api import:dictionary ../../downloads/bn-wiktextract.jsonl --source wiktextract
 ```
+
+This grows the dictionary from ~112 curated entries to ~15k Wiktionary-derived
+entries with transliteration, IPA, usage examples, and synonyms. Each import is
+recorded in a `dictionary_sources` table with its license (CC BY-SA 4.0) and
+attribution. See [data/bn-dictionary/SOURCES.md](data/bn-dictionary/SOURCES.md).
 
 ## MVP Behavior
 
@@ -68,9 +75,12 @@ Response:
       "normalized": "ভালো",
       "lang": "bn",
       "transliteration": "bhalo",
+      "ipa": "/bʱalo/",
       "partOfSpeech": "adjective",
       "definition": "Good; pleasant; well.",
-      "source": "seed"
+      "examples": ["ভালো মানুষ — a good person"],
+      "synonyms": ["উত্তম"],
+      "source": "wiktextract"
     }
   ],
   "latencyMs": 4

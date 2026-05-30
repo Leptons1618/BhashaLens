@@ -5,6 +5,7 @@ import { extname, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { createDbContext } from "./client.js";
+import { resolveSourceByLocalPath, SOURCE_REGISTRY } from "./sources.js";
 
 type ImportFormat = "json" | "jsonl" | "tsv";
 
@@ -16,15 +17,31 @@ interface ImportOptions {
   source?: string;
 }
 
+interface WiktextractExample {
+  text?: string;
+  english?: string;
+  translation?: string;
+  roman?: string;
+  type?: string;
+}
+
 interface WiktextractSense {
   glosses?: string[];
   raw_glosses?: string[];
+  tags?: string[];
+  examples?: WiktextractExample[];
   synonyms?: Array<{ word?: string }>;
+}
+
+interface WiktextractForm {
+  form?: string;
+  tags?: string[];
 }
 
 interface WiktextractSound {
   ipa?: string;
   roman?: string;
+  note?: string;
   tags?: string[];
 }
 
@@ -32,12 +49,78 @@ interface WiktextractEntry {
   lang?: string;
   lang_code?: string;
   pos?: string;
+  forms?: WiktextractForm[];
   senses?: WiktextractSense[];
   sounds?: WiktextractSound[];
+  synonyms?: Array<{ word?: string }>;
   word?: string;
 }
 
+/** Map terse Wiktextract POS codes to reader-friendly labels. */
+const POS_LABELS: Record<string, string> = {
+  adj: "adjective",
+  adv: "adverb",
+  conj: "conjunction",
+  det: "determiner",
+  intj: "interjection",
+  name: "proper noun",
+  num: "numeral",
+  postp: "postposition",
+  prep: "preposition",
+  pron: "pronoun",
+  particle: "particle",
+  phrase: "phrase",
+  prefix: "prefix",
+  suffix: "suffix"
+};
+
 const adapter = new BengaliAdapter();
+
+function normalizePos(pos: string | undefined): string {
+  const value = readString(pos);
+  if (!value) {
+    return "unknown";
+  }
+  return POS_LABELS[value] ?? value;
+}
+
+/**
+ * Bengali romanization lives in `forms[]` tagged "romanization" (present on
+ * ~99% of records), NOT in `sounds[].roman`. Fall back to a sound roman only if
+ * a form is missing.
+ */
+function pickTransliteration(raw: WiktextractEntry): string {
+  const form = raw.forms?.find((item) => item.tags?.includes("romanization") && readString(item.form));
+  if (form?.form) {
+    return readString(form.form) ?? "";
+  }
+  const sound = raw.sounds?.find((item) => readString(item.roman));
+  return readString(sound?.roman) ?? "";
+}
+
+/** Prefer a phonemic /…/ transcription, then any bracketed [..], for compactness. */
+function pickIpa(raw: WiktextractEntry): string | undefined {
+  const sounds = raw.sounds ?? [];
+  const phonemic = sounds.find((item) => readString(item.ipa)?.startsWith("/"));
+  return readString(phonemic?.ipa) ?? readString(sounds.find((item) => item.ipa)?.ipa);
+}
+
+/** Format up to three usage examples as "Bengali — English" lines. */
+function pickExamples(sense: WiktextractSense): string[] | undefined {
+  const formatted: string[] = [];
+  for (const example of sense.examples ?? []) {
+    const text = readString(example.text);
+    if (!text) {
+      continue;
+    }
+    const gloss = readString(example.english) ?? readString(example.translation);
+    formatted.push(gloss ? `${text} — ${gloss}` : text);
+    if (formatted.length >= 3) {
+      break;
+    }
+  }
+  return formatted.length > 0 ? formatted : undefined;
+}
 
 function parseArgs(argv: string[]): ImportOptions {
   const [filePath, ...flags] = argv;
@@ -113,6 +196,7 @@ function normalizeEntry(entry: Partial<DictionaryEntry>, source: string): Dictio
   return {
     definition,
     examples: readStringArray(entry.examples),
+    ipa: readString(entry.ipa),
     lang: "bn",
     normalized,
     partOfSpeech: readString(entry.partOfSpeech) ?? "unknown",
@@ -128,16 +212,22 @@ function fromWiktextract(raw: WiktextractEntry, source: string): DictionaryEntry
     return [];
   }
 
-  const transliteration = raw.sounds?.find((sound) => sound.roman)?.roman ?? raw.sounds?.find((sound) => sound.ipa)?.ipa ?? "";
+  const transliteration = pickTransliteration(raw);
+  const ipa = pickIpa(raw);
+  const partOfSpeech = normalizePos(raw.pos);
+  const topSynonyms = raw.synonyms?.map((synonym) => synonym.word).filter((word): word is string => Boolean(word)) ?? [];
   const entries: DictionaryEntry[] = [];
 
   for (const sense of raw.senses ?? []) {
     const definition = sense.glosses?.[0] ?? sense.raw_glosses?.[0];
-    const synonyms = sense.synonyms?.map((synonym) => synonym.word).filter((word): word is string => Boolean(word));
+    const senseSynonyms = sense.synonyms?.map((synonym) => synonym.word).filter((word): word is string => Boolean(word)) ?? [];
+    const synonyms = Array.from(new Set([...senseSynonyms, ...topSynonyms]));
     const entry = normalizeEntry(
       {
         definition,
-        partOfSpeech: raw.pos ?? "unknown",
+        examples: pickExamples(sense),
+        ipa,
+        partOfSpeech,
         source,
         synonyms,
         transliteration,
@@ -154,6 +244,10 @@ function fromWiktextract(raw: WiktextractEntry, source: string): DictionaryEntry
   return entries;
 }
 
+export function parseDictionaryRecord(raw: unknown, source = "import"): DictionaryEntry[] {
+  return fromRecord(raw, source);
+}
+
 function fromRecord(raw: unknown, source: string): DictionaryEntry[] {
   if (!raw || typeof raw !== "object") {
     return [];
@@ -168,6 +262,7 @@ function fromRecord(raw: unknown, source: string): DictionaryEntry[] {
     {
       definition: readString(record.definition) ?? readString(record.meaning),
       examples: readStringArray(record.examples),
+      ipa: readString(record.ipa),
       normalized: readString(record.normalized),
       partOfSpeech: readString(record.partOfSpeech) ?? readString(record.pos),
       source: readString(record.source),
@@ -259,6 +354,7 @@ export async function importDictionaryFile(options: ImportOptions): Promise<{ in
       word,
       normalized,
       transliteration,
+      ipa,
       part_of_speech,
       definition,
       source,
@@ -270,6 +366,7 @@ export async function importDictionaryFile(options: ImportOptions): Promise<{ in
       @word,
       @normalized,
       @transliteration,
+      @ipa,
       @partOfSpeech,
       @definition,
       @source,
@@ -283,6 +380,8 @@ export async function importDictionaryFile(options: ImportOptions): Promise<{ in
     for (const row of rows) {
       const result = insert.run({
         ...row,
+        ipa: row.ipa ?? null,
+        source: row.source ?? null,
         examples: row.examples ? JSON.stringify(row.examples) : null,
         synonyms: row.synonyms ? JSON.stringify(row.synonyms) : null
       });
@@ -292,8 +391,40 @@ export async function importDictionaryFile(options: ImportOptions): Promise<{ in
   });
 
   const inserted = writeMany(entries);
+  recordProvenance(context.sqlite, options.source, inserted);
   context.sqlite.close();
   return { inserted, parsed: entries.length };
+}
+
+/** Upsert provenance metadata so the app can attribute where definitions came from. */
+function recordProvenance(sqlite: ReturnType<typeof createDbContext>["sqlite"], sourceKey: string | undefined, inserted: number): void {
+  if (!sourceKey) {
+    return;
+  }
+
+  const meta = SOURCE_REGISTRY[sourceKey] ?? resolveSourceByLocalPath(sourceKey);
+  sqlite
+    .prepare(
+      `INSERT INTO dictionary_sources (key, title, homepage, license, license_url, attribution, entry_count, imported_at)
+       VALUES (@key, @title, @homepage, @license, @licenseUrl, @attribution, @entryCount, unixepoch())
+       ON CONFLICT(key) DO UPDATE SET
+         title = excluded.title,
+         homepage = excluded.homepage,
+         license = excluded.license,
+         license_url = excluded.license_url,
+         attribution = excluded.attribution,
+         entry_count = excluded.entry_count,
+         imported_at = excluded.imported_at`
+    )
+    .run({
+      key: sourceKey,
+      title: meta?.title ?? sourceKey,
+      homepage: meta?.homepage ?? null,
+      license: meta?.license ?? null,
+      licenseUrl: meta?.licenseUrl ?? null,
+      attribution: meta?.attribution ?? null,
+      entryCount: inserted
+    });
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

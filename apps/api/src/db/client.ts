@@ -17,6 +17,13 @@ export function resolveDatabaseFile(databaseFile = process.env.DATABASE_FILE ?? 
   return resolve(process.cwd(), databaseFile);
 }
 
+function ensureColumn(sqlite: Database.Database, table: string, column: string, definition: string): void {
+  const existing = sqlite.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (!existing.some((col) => col.name === column)) {
+    sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
 export function ensureSchema(sqlite: Database.Database): void {
   sqlite.exec(`
     CREATE TABLE IF NOT EXISTS dictionary_entries (
@@ -25,6 +32,7 @@ export function ensureSchema(sqlite: Database.Database): void {
       word TEXT NOT NULL,
       normalized TEXT NOT NULL,
       transliteration TEXT NOT NULL,
+      ipa TEXT,
       part_of_speech TEXT NOT NULL,
       definition TEXT NOT NULL,
       source TEXT,
@@ -38,7 +46,21 @@ export function ensureSchema(sqlite: Database.Database): void {
 
     CREATE UNIQUE INDEX IF NOT EXISTS dictionary_entries_unique_idx
       ON dictionary_entries(lang, normalized, part_of_speech, definition);
+
+    CREATE TABLE IF NOT EXISTS dictionary_sources (
+      key TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      homepage TEXT,
+      license TEXT,
+      license_url TEXT,
+      attribution TEXT,
+      entry_count INTEGER NOT NULL DEFAULT 0,
+      imported_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
   `);
+
+  // Idempotent migration for databases created before the ipa column existed.
+  ensureColumn(sqlite, "dictionary_entries", "ipa", "TEXT");
 }
 
 export function createDbContext(databaseFile?: string): DbContext {

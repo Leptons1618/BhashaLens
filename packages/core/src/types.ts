@@ -39,6 +39,7 @@ export interface LanguageAdapter {
 export interface DictionaryEntry {
   definition: string;
   examples?: string[];
+  ipa?: string;
   lang: LanguageCode;
   normalized: string;
   partOfSpeech: string;

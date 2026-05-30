@@ -16,3 +16,6 @@ coverage
 *.sqlite-shm
 *.sqlite-wal
 .data
+
+# Generated bulk dictionary sources — reproduce with `pnpm fetch:source`
+downloads

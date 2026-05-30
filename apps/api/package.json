@@ -8,6 +8,7 @@
     "build": "tsc -p tsconfig.json",
     "db:push": "drizzle-kit push",
     "dev": "tsx watch src/index.ts",
+    "fetch:source": "tsx src/db/fetch-source.ts",
     "import:dictionary": "tsx src/db/import-dictionary.ts",
     "lint": "tsc -p tsconfig.json --noEmit",
     "migrate": "tsx src/db/migrate.ts",

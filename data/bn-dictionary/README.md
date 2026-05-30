@@ -23,15 +23,21 @@ Large dictionary sources should be imported into SQLite through the API importer
 
 ```bash
 pnpm --filter @bhashalens/api migrate
-pnpm --filter @bhashalens/api import:dictionary -- ../../data/bn-dictionary/entries.json --replace --source seed
-pnpm --filter @bhashalens/api import:dictionary -- ../../downloads/bn-wiktextract.jsonl --source wiktextract
-pnpm --filter @bhashalens/api import:dictionary -- ../../downloads/custom.tsv --format tsv --source custom
+pnpm --filter @bhashalens/api seed
+pnpm --filter @bhashalens/api fetch:source wiktextract
+pnpm --filter @bhashalens/api import:dictionary ../../downloads/bn-wiktextract.jsonl --source wiktextract
+pnpm --filter @bhashalens/api import:dictionary ../../downloads/custom.tsv --format tsv --source custom
 ```
+
+> Run from the repo root; arguments after the script name are passed straight
+> through (no `--` separator needed with pnpm filters here).
 
 The importer currently supports:
 
-- Native BhashaLens JSON arrays.
+- Native BhashaLens JSON arrays (now including an optional `ipa` field).
 - JSONL records shaped like Wiktextract/Kaikki output with `lang_code: "bn"`.
+  Transliteration is read from `forms[]` (`romanization` tag), IPA from
+  `sounds[]`, examples and synonyms from `senses[]`.
 - TSV with headers such as `word`, `definition`, `transliteration`, `partOfSpeech`, `synonyms`, and `source`.
 
 ## Bulk Source Plan

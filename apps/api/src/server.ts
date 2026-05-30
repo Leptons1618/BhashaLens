@@ -49,6 +49,7 @@ function mapRow(row: DictionaryEntryRow): DictionaryEntry {
   return {
     definition: row.definition,
     examples: coerceArray(row.examples),
+    ipa: row.ipa ?? undefined,
     lang: row.lang,
     normalized: row.normalized,
     partOfSpeech: row.partOfSpeech,
