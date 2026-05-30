@@ -49,3 +49,33 @@ export const dictionarySources = sqliteTable("dictionary_sources", {
 
 export type DictionarySourceInsert = typeof dictionarySources.$inferInsert;
 export type DictionarySourceRow = typeof dictionarySources.$inferSelect;
+
+/**
+ * Cache of machine-translation fallbacks used when no curated/Wiktionary entry
+ * exists. Kept in its OWN table (never merged into `dictionary_entries`) so
+ * machine output is reusable but can never be mistaken for vetted dictionary
+ * data. Surfaced in the UI with an explicit "machine translation" label.
+ */
+export const translationCache = sqliteTable(
+  "translation_cache",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    lang: text("lang").notNull(),
+    normalized: text("normalized").notNull(),
+    targetLang: text("target_lang").notNull(),
+    word: text("word").notNull(),
+    translation: text("translation").notNull(),
+    provider: text("provider").notNull().default("google-translate"),
+    createdAt: integer("created_at").notNull().default(sql`(unixepoch())`)
+  },
+  (table) => ({
+    uniqueTranslationIdx: uniqueIndex("translation_cache_unique_idx").on(
+      table.lang,
+      table.normalized,
+      table.targetLang
+    )
+  })
+);
+
+export type TranslationCacheInsert = typeof translationCache.$inferInsert;
+export type TranslationCacheRow = typeof translationCache.$inferSelect;

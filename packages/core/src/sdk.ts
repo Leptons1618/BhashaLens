@@ -1,5 +1,5 @@
 import { bengaliAdapter } from "./bengali.js";
-import { FloatingDictionaryPopup } from "./popup.js";
+import { DEFAULT_PANELS, FloatingDictionaryPopup } from "./popup.js";
 import type {
   ActivationMode,
   DictionaryProvider,
@@ -10,8 +10,12 @@ import type {
   LookupResponse,
   MorphologyAnalysis,
   MorphologyCandidate,
+  PanelDescriptor,
+  PanelId,
+  PanelState,
   PopupController,
   PopupLookupState,
+  TranslationProvider,
   WordSpan
 } from "./types.js";
 
@@ -27,6 +31,20 @@ export interface BhashaLensOptions {
   onLookupStart?: (candidate: LookupCandidate) => void;
   popup?: PopupController;
   provider: DictionaryProvider;
+  /** Optional machine-translation fallback for words with no dictionary entry. */
+  translationProvider?: TranslationProvider;
+  /** Target language for the translate panel (default "en"). */
+  translateTo?: string;
+  /** Wikipedia subdomain to query for the Wikipedia panel (default "bn"). */
+  wikipediaLang?: string;
+  /** Inject a fetch implementation (mainly for tests). */
+  fetcher?: typeof fetch;
+}
+
+interface WikipediaSummary {
+  summary: string;
+  title: string;
+  url: string;
 }
 
 const DEFAULT_MAX_SELECTION_CHARS = 64;
@@ -167,6 +185,13 @@ export class BhashaLens {
   private readonly onLookupStart?: (candidate: LookupCandidate) => void;
   private readonly popup: PopupController;
   private readonly provider: DictionaryProvider;
+  private readonly translationProvider?: TranslationProvider;
+  private readonly translateTo: string;
+  private readonly wikipediaLang: string;
+  private readonly fetcher?: typeof fetch;
+  private readonly panels: PanelDescriptor[];
+  private currentState?: PopupLookupState;
+  private currentContext?: { lang: LanguageCode; normalized: string; word: string };
 
   constructor(options: BhashaLensOptions) {
     this.activation = options.activation ?? "selection";
@@ -178,8 +203,18 @@ export class BhashaLens {
     this.onError = options.onError;
     this.onLookupComplete = options.onLookupComplete;
     this.onLookupStart = options.onLookupStart;
-    this.popup = options.popup ?? new FloatingDictionaryPopup(this.doc, { onHide: () => this.highlighter?.clear() });
     this.provider = options.provider;
+    this.translationProvider = options.translationProvider;
+    this.translateTo = options.translateTo ?? "en";
+    this.wikipediaLang = options.wikipediaLang ?? "bn";
+    this.fetcher = options.fetcher;
+    this.panels = DEFAULT_PANELS.filter((panel) => panel.id !== "translate" || Boolean(this.translationProvider));
+    this.popup =
+      options.popup ??
+      new FloatingDictionaryPopup(this.doc, {
+        onHide: () => this.highlighter?.clear(),
+        onSelectPanel: this.handlePanelSelect
+      });
   }
 
   destroy(): void {
@@ -217,14 +252,18 @@ export class BhashaLens {
     const normalized = this.adapter.normalize(word);
     const result = await this.lookupWithFallbacks(normalized, this.adapter.lang);
 
+    const found = result.response.entries.length > 0;
     return {
+      activePanel: found ? "dictionary" : this.fallbackPanel(),
       externalLinks: createExternalLookupLinks(normalized),
       lookupWord: result.lookupWord,
       matchedCandidate: result.matchedCandidate,
       morphology: result.morphology,
       normalized,
+      panels: this.panels,
+      panelStates: {},
       response: result.response,
-      status: result.response.entries.length > 0 ? "ready" : "empty",
+      status: found ? "ready" : "empty",
       word
     };
   }
@@ -371,13 +410,18 @@ export class BhashaLens {
     this.abortController = controller;
 
     const loadingState: PopupLookupState = {
+      activePanel: "dictionary",
       externalLinks: createExternalLookupLinks(candidate.normalized),
       morphology: this.adapter.analyzeMorphology?.(candidate.normalized),
       normalized: candidate.normalized,
+      panels: this.panels,
+      panelStates: {},
       status: "loading",
       word: candidate.word
     };
 
+    this.currentState = loadingState;
+    this.currentContext = { lang: candidate.lang, normalized: candidate.normalized, word: candidate.word };
     this.onLookupStart?.(candidate);
     this.highlighter?.show(candidate.highlightRects.length > 0 ? candidate.highlightRects : [candidate.rect]);
     this.popup.show(candidate.rect, loadingState);
@@ -388,37 +432,167 @@ export class BhashaLens {
         return;
       }
 
+      const found = result.response.entries.length > 0;
+      const activePanel: PanelId = found ? "dictionary" : this.fallbackPanel();
       const nextState: PopupLookupState = {
+        activePanel,
         externalLinks: createExternalLookupLinks(candidate.normalized),
         lookupWord: result.lookupWord,
         matchedCandidate: result.matchedCandidate,
         morphology: result.morphology,
         normalized: candidate.normalized,
+        panels: this.panels,
+        panelStates: {},
         response: result.response,
-        status: result.response.entries.length > 0 ? "ready" : "empty",
+        status: found ? "ready" : "empty",
         word: candidate.word
       };
 
+      this.currentState = nextState;
       this.popup.update(nextState);
       this.onLookupComplete?.(candidate, nextState);
+
+      // When nothing was found, eagerly load the fallback panel so the user
+      // immediately sees a translation/summary instead of an empty result.
+      if (!found && activePanel !== "dictionary") {
+        void this.ensurePanelLoaded(activePanel, lookupKey);
+      }
     } catch (error) {
       if (controller.signal.aborted || this.lastLookupKey !== lookupKey) {
         return;
       }
 
       const nextState: PopupLookupState = {
+        activePanel: "dictionary",
         error: error instanceof Error ? error.message : "Lookup failed",
         externalLinks: createExternalLookupLinks(candidate.normalized),
         morphology: this.adapter.analyzeMorphology?.(candidate.normalized),
         normalized: candidate.normalized,
+        panels: this.panels,
+        panelStates: {},
         status: "error",
         word: candidate.word
       };
 
+      this.currentState = nextState;
       this.popup.update(nextState);
       this.onError?.(error);
       this.onLookupComplete?.(candidate, nextState);
     }
+  }
+
+  private fallbackPanel(): PanelId {
+    return this.translationProvider ? "translate" : "wikipedia";
+  }
+
+  private readonly handlePanelSelect = (panel: PanelId): void => {
+    if (!this.currentState || this.currentState.activePanel === panel) {
+      this.currentState = this.currentState ? { ...this.currentState, activePanel: panel } : this.currentState;
+      if (this.currentState) {
+        this.popup.update(this.currentState);
+      }
+      void this.ensurePanelLoaded(panel, this.lastLookupKey);
+      return;
+    }
+
+    this.currentState = { ...this.currentState, activePanel: panel };
+    this.popup.update(this.currentState);
+    void this.ensurePanelLoaded(panel, this.lastLookupKey);
+  };
+
+  private setPanelState(panel: PanelId, panelState: PanelState, key?: string): void {
+    if (key !== undefined && key !== this.lastLookupKey) {
+      return;
+    }
+    if (!this.currentState) {
+      return;
+    }
+
+    this.currentState = {
+      ...this.currentState,
+      panelStates: { ...this.currentState.panelStates, [panel]: panelState }
+    };
+    this.popup.update(this.currentState);
+  }
+
+  private async ensurePanelLoaded(panel: PanelId, key?: string): Promise<void> {
+    const context = this.currentContext;
+    if (!context || !this.currentState || panel === "dictionary") {
+      return;
+    }
+
+    if (panel === "web") {
+      this.setPanelState(panel, { status: "ready", links: this.currentState.externalLinks ?? [] }, key);
+      return;
+    }
+
+    const existing = this.currentState.panelStates?.[panel];
+    if (existing && existing.status !== "idle" && existing.status !== "error") {
+      return;
+    }
+
+    this.setPanelState(panel, { status: "loading" }, key);
+
+    try {
+      if (panel === "translate") {
+        if (!this.translationProvider) {
+          this.setPanelState(panel, { status: "empty" }, key);
+          return;
+        }
+        const result = await this.translationProvider.translate(context.normalized, context.lang, this.translateTo);
+        this.setPanelState(
+          panel,
+          result.found && result.translation
+            ? { cached: result.cached, provider: result.provider, status: "ready", translation: result.translation }
+            : { status: "empty" },
+          key
+        );
+        return;
+      }
+
+      if (panel === "wikipedia") {
+        const summary = await this.fetchWikipedia(context.normalized);
+        this.setPanelState(
+          panel,
+          summary
+            ? { status: "ready", summary: summary.summary, title: summary.title, url: summary.url }
+            : { status: "empty" },
+          key
+        );
+      }
+    } catch (error) {
+      this.setPanelState(panel, { error: error instanceof Error ? error.message : "Lookup failed", status: "error" }, key);
+    }
+  }
+
+  private async fetchWikipedia(word: string): Promise<WikipediaSummary | null> {
+    const fetcher = this.fetcher ?? (typeof fetch !== "undefined" ? fetch.bind(globalThis) : undefined);
+    if (!fetcher) {
+      return null;
+    }
+
+    const endpoint = `https://${this.wikipediaLang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(word)}`;
+    const response = await fetcher(endpoint, { headers: { accept: "application/json" } });
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = (await response.json()) as {
+      title?: string;
+      extract?: string;
+      type?: string;
+      content_urls?: { desktop?: { page?: string } };
+    };
+
+    if (!data.extract || data.type === "https://mediawiki.org/wiki/HyperSwitch/errors/not_found") {
+      return null;
+    }
+
+    return {
+      summary: data.extract,
+      title: data.title ?? word,
+      url: data.content_urls?.desktop?.page ?? endpoint
+    };
   }
 
   private async lookupWithFallbacks(

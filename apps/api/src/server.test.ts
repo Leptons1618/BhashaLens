@@ -62,4 +62,44 @@ describe("lookup API", () => {
 
     await app.close();
   });
+
+  it("translates via fallback once, then serves from cache", async () => {
+    const dbContext = createDbContext(":memory:");
+    let calls = 0;
+    const app = await createServer({
+      dbContext,
+      logger: false,
+      translate: async () => {
+        calls += 1;
+        return "warning";
+      }
+    });
+
+    const url = "/translate?word=%E0%A6%B8%E0%A6%A4%E0%A6%B0%E0%A7%8D%E0%A6%95&from=bn&to=en";
+    const first = (await app.inject({ method: "GET", url })).json();
+    expect(first.found).toBe(true);
+    expect(first.translation).toBe("warning");
+    expect(first.cached).toBe(false);
+    expect(first.provider).toBe("google-translate");
+
+    const second = (await app.inject({ method: "GET", url })).json();
+    expect(second.cached).toBe(true);
+    expect(second.translation).toBe("warning");
+    expect(calls).toBe(1); // second request did not hit the translator
+
+    await app.close();
+  });
+
+  it("reports found:false when the translator returns nothing", async () => {
+    const dbContext = createDbContext(":memory:");
+    const app = await createServer({ dbContext, logger: false, translate: async () => null });
+
+    const body = (
+      await app.inject({ method: "GET", url: "/translate?word=%E0%A6%85%E0%A6%9C%E0%A6%BE%E0%A6%A8%E0%A6%BE" })
+    ).json();
+    expect(body.found).toBe(false);
+    expect(body.translation).toBeNull();
+
+    await app.close();
+  });
 });

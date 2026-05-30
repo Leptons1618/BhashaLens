@@ -47,11 +47,13 @@ attribution. See [data/bn-dictionary/SOURCES.md](data/bn-dictionary/SOURCES.md).
 - Normalizes lookup terms with NFC before querying.
 - Uses `/lookup?word=&lang=bn` for exact dictionary lookup.
 - Shows a nonmodal popup near the selected word using Floating UI.
+- Presents a Definer-style left tab rail: **Dictionary**, **Translate**, **Wikipedia**, **Web**.
+- When no dictionary entry exists, auto-falls back to a cached machine translation
+  (`/translate`) and offers a Bengali Wikipedia summary — clearly labelled as machine output.
 - Highlights the active word with an inline underline overlay.
 - Caches lookup results in the content script for responsive repeat lookups.
 - Uses conservative Bengali suffix stripping to try root-form fallback lookups.
-- Adds quick links to Google Search, Bengali Wikipedia search, and Google Translate.
-- Keeps language adapters and dictionary providers pluggable.
+- Keeps language adapters, dictionary providers, and translation providers pluggable.
 
 The popup workflow borrows proven Yomitan/Yomichan concepts: selection monitoring, pointer word scanning, fast local state, cached lookups, keyboard dismissal, and no page navigation.
 
@@ -85,4 +87,18 @@ Response:
   ],
   "latencyMs": 4
 }
+```
+
+### Translate fallback
+
+For words with no dictionary entry, the client falls back to a cached machine
+translation. The first request hits Google Translate; subsequent requests are
+served from the `translation_cache` table (kept separate from curated data).
+
+```http
+GET /translate?word=সতর্কীকরণ&from=bn&to=en
+```
+
+```json
+{ "found": true, "translation": "warning", "provider": "google-translate", "cached": false, "latencyMs": 382 }
 ```

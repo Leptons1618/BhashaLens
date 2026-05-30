@@ -1,4 +1,4 @@
-import { BengaliAdapter, BhashaLens, RestDictionaryProvider } from "@bhashalens/core";
+import { BengaliAdapter, BhashaLens, RestDictionaryProvider, RestTranslationProvider } from "@bhashalens/core";
 import type { PlasmoCSConfig } from "plasmo";
 import { readExtensionSettings } from "../settings.js";
 
@@ -36,6 +36,13 @@ async function startLens(): Promise<void> {
       maxCacheEntries: 750,
       timeoutMs: 700
     }),
+    translationProvider: new RestTranslationProvider({
+      baseUrl: settings.apiBaseUrl,
+      defaultFrom: "bn",
+      defaultTo: "en",
+      timeoutMs: 3000
+    }),
+    wikipediaLang: "bn",
     onError: (error) => {
       console.debug("[BhashaLens] lookup failed", error);
     }

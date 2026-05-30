@@ -1,4 +1,11 @@
-import type { DictionaryEntry, DictionaryProvider, LanguageCode, LookupResponse } from "./types.js";
+import type {
+  DictionaryEntry,
+  DictionaryProvider,
+  LanguageCode,
+  LookupResponse,
+  TranslationProvider,
+  TranslationResult
+} from "./types.js";
 
 export interface RestDictionaryProviderOptions {
   baseUrl: string;
@@ -115,6 +122,61 @@ export class RestDictionaryProvider implements DictionaryProvider {
       expiresAt: now() + this.cacheTtlMs,
       value
     });
+  }
+}
+
+export interface RestTranslationProviderOptions {
+  baseUrl: string;
+  defaultFrom?: LanguageCode;
+  defaultTo?: string;
+  fetcher?: typeof fetch;
+  timeoutMs?: number;
+}
+
+/** Calls the BhashaLens `/translate` fallback endpoint (cached, server-side). */
+export class RestTranslationProvider implements TranslationProvider {
+  private readonly baseUrl: string;
+  private readonly defaultFrom: LanguageCode;
+  private readonly defaultTo: string;
+  private readonly fetcher: typeof fetch;
+  private readonly timeoutMs: number;
+
+  constructor(options: RestTranslationProviderOptions) {
+    this.baseUrl = options.baseUrl.replace(/\/+$/, "");
+    this.defaultFrom = options.defaultFrom ?? "bn";
+    this.defaultTo = options.defaultTo ?? "en";
+    this.fetcher = options.fetcher ?? fetch.bind(globalThis);
+    this.timeoutMs = options.timeoutMs ?? 2500;
+  }
+
+  async translate(word: string, from: string = this.defaultFrom, to: string = this.defaultTo, signal?: AbortSignal): Promise<TranslationResult> {
+    const normalized = word.normalize("NFC").trim();
+    const empty: TranslationResult = { cached: false, found: false, provider: "google-translate", translation: null, word: normalized };
+    if (normalized.length === 0) {
+      return empty;
+    }
+
+    const controller = new AbortController();
+    const timeout = globalThis.setTimeout(() => controller.abort(), this.timeoutMs);
+    const abort = () => controller.abort();
+    signal?.addEventListener("abort", abort, { once: true });
+
+    try {
+      const params = new URLSearchParams({ from, to, word: normalized });
+      const response = await this.fetcher(`${this.baseUrl}/translate?${params.toString()}`, {
+        headers: { accept: "application/json" },
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        return empty;
+      }
+
+      return (await response.json()) as TranslationResult;
+    } finally {
+      globalThis.clearTimeout(timeout);
+      signal?.removeEventListener("abort", abort);
+    }
   }
 }
 

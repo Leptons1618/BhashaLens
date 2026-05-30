@@ -1,11 +1,30 @@
 import { autoUpdate, computePosition, flip, offset, shift, type VirtualElement } from "@floating-ui/dom";
-import type { PopupController, PopupLookupState } from "./types.js";
+import type { PanelDescriptor, PanelId, PopupController, PopupLookupState } from "./types.js";
 
 const POPUP_Z_INDEX = "2147483647";
 
 export interface FloatingDictionaryPopupOptions {
   onHide?: () => void;
+  onSelectPanel?: (panel: PanelId) => void;
 }
+
+const ICONS: Record<PanelId, string> = {
+  dictionary:
+    '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2z"/><path d="M4 19a2 2 0 0 0 2 2h12"/></svg>',
+  translate:
+    '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h7"/><path d="M7 4c0 4.5-2 8-4 9"/><path d="M5 9c0 2 2.5 4 6 4"/><path d="m13 20 4-9 4 9"/><path d="M14.5 17h5"/></svg>',
+  wikipedia:
+    '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><text x="12" y="17" font-size="15" font-family="Georgia, serif" font-weight="700" text-anchor="middle">W</text></svg>',
+  web:
+    '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>'
+};
+
+export const DEFAULT_PANELS: PanelDescriptor[] = [
+  { icon: ICONS.dictionary, id: "dictionary", label: "Dictionary" },
+  { icon: ICONS.translate, id: "translate", label: "Translate" },
+  { icon: ICONS.wikipedia, id: "wikipedia", label: "Wikipedia" },
+  { icon: ICONS.web, id: "web", label: "Web search" }
+];
 
 function escapeHtml(value: string): string {
   return value
@@ -26,7 +45,7 @@ function renderEntries(state: PopupLookupState): string {
   }
 
   if (state.status === "empty" || !state.response?.entries.length) {
-    return `<div class="bl-status">No dictionary entry yet.</div>`;
+    return `<div class="bl-status">No dictionary entry. Try <strong>Translate</strong> or <strong>Wikipedia</strong> on the left.</div>`;
   }
 
   return state.response.entries
@@ -79,21 +98,116 @@ function renderMorphology(state: PopupLookupState): string {
   `;
 }
 
-function renderExternalLinks(state: PopupLookupState): string {
-  if (!state.externalLinks?.length) {
-    return "";
+function renderTranslate(state: PopupLookupState): string {
+  const panel = state.panelStates?.translate;
+  if (!panel || panel.status === "idle" || panel.status === "loading") {
+    return `<div class="bl-status">Translating…</div>`;
+  }
+
+  if (panel.status === "error") {
+    return `<div class="bl-status bl-error">${escapeHtml(panel.error ?? "Translation failed")}</div>`;
+  }
+
+  if (panel.status === "empty" || !panel.translation) {
+    return `<div class="bl-status">No machine translation available.</div>`;
+  }
+
+  const badge = `Machine translation · ${escapeHtml(panel.provider ?? "google")}${panel.cached ? " · cached" : ""}`;
+  return `
+    <div class="bl-translate">
+      <div class="bl-tl-row">
+        <span class="bl-tl-lang">Bengali</span>
+        <span class="bl-tl-text" lang="bn">${escapeHtml(state.word)}</span>
+      </div>
+      <div class="bl-tl-sep" aria-hidden="true">→</div>
+      <div class="bl-tl-row">
+        <span class="bl-tl-lang">English</span>
+        <span class="bl-tl-text bl-tl-out">${escapeHtml(panel.translation)}</span>
+      </div>
+      <div class="bl-badge">${badge}</div>
+    </div>
+  `;
+}
+
+function renderWikipedia(state: PopupLookupState): string {
+  const panel = state.panelStates?.wikipedia;
+  if (!panel || panel.status === "idle" || panel.status === "loading") {
+    return `<div class="bl-status">Loading Wikipedia…</div>`;
+  }
+
+  if (panel.status === "error") {
+    return `<div class="bl-status bl-error">${escapeHtml(panel.error ?? "Wikipedia lookup failed")}</div>`;
+  }
+
+  if (panel.status === "empty" || !panel.summary) {
+    return `<div class="bl-status">No Wikipedia article found.</div>`;
+  }
+
+  const link = panel.url
+    ? `<a class="bl-readmore" href="${escapeHtml(panel.url)}" target="_blank" rel="noopener noreferrer">Read on Wikipedia →</a>`
+    : "";
+  return `
+    <div class="bl-wiki">
+      ${panel.title ? `<h3>${escapeHtml(panel.title)}</h3>` : ""}
+      <p>${escapeHtml(panel.summary)}</p>
+      ${link}
+    </div>
+  `;
+}
+
+function renderWeb(state: PopupLookupState): string {
+  const links = state.panelStates?.web?.links ?? state.externalLinks ?? [];
+  if (links.length === 0) {
+    return `<div class="bl-status">No web links available.</div>`;
   }
 
   return `
-    <nav class="bl-links" aria-label="External lookups">
-      ${state.externalLinks
-        .map((link) => `<a href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(link.label)}</a>`)
+    <nav class="bl-weblinks" aria-label="External lookups">
+      ${links
+        .map(
+          (link) =>
+            `<a href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer"><span>${escapeHtml(link.label)}</span><span aria-hidden="true">↗</span></a>`
+        )
+        .join("")}
+    </nav>
+  `;
+}
+
+function renderActivePanel(state: PopupLookupState): string {
+  switch (state.activePanel ?? "dictionary") {
+    case "translate":
+      return renderTranslate(state);
+    case "wikipedia":
+      return renderWikipedia(state);
+    case "web":
+      return renderWeb(state);
+    default:
+      return `${renderMorphology(state)}${renderEntries(state)}`;
+  }
+}
+
+function renderRail(state: PopupLookupState): string {
+  const panels = state.panels ?? [];
+  if (panels.length === 0) {
+    return "";
+  }
+
+  const active = state.activePanel ?? "dictionary";
+  return `
+    <nav class="bl-rail" aria-label="Lookup sources">
+      ${panels
+        .map((panel) => {
+          const isActive = panel.id === active;
+          const isLoading = state.panelStates?.[panel.id]?.status === "loading";
+          return `<button class="bl-tab${isActive ? " active" : ""}${isLoading ? " loading" : ""}" data-panel="${panel.id}" type="button" title="${escapeHtml(panel.label)}" aria-label="${escapeHtml(panel.label)}" aria-pressed="${isActive}">${panel.icon}</button>`;
+        })
         .join("")}
     </nav>
   `;
 }
 
 function template(state: PopupLookupState): string {
+  const hasRail = (state.panels ?? []).length > 0;
   return `
     <style>
       :host {
@@ -103,13 +217,66 @@ function template(state: PopupLookupState): string {
       .bl-shell {
         background: #fffaf0;
         border: 1px solid rgba(45, 31, 19, 0.16);
-        border-radius: 8px;
+        border-radius: 10px;
         box-shadow: 0 18px 50px rgba(29, 25, 20, 0.22), 0 2px 10px rgba(29, 25, 20, 0.12);
         color: #261b12;
+        display: flex;
         font-family: "Noto Serif Bengali", "Noto Sans Bengali", Georgia, serif;
-        max-width: min(360px, calc(100vw - 20px));
-        min-width: 230px;
+        max-width: min(400px, calc(100vw - 20px));
+        min-width: 268px;
         overflow: hidden;
+      }
+
+      .bl-rail {
+        background: #f4ead8;
+        border-right: 1px solid rgba(45, 31, 19, 0.12);
+        display: flex;
+        flex: 0 0 auto;
+        flex-direction: column;
+        gap: 2px;
+        padding: 8px 6px;
+      }
+
+      .bl-tab {
+        align-items: center;
+        appearance: none;
+        background: transparent;
+        border: 0;
+        border-radius: 8px;
+        color: #8a6a4c;
+        cursor: pointer;
+        display: inline-flex;
+        height: 34px;
+        justify-content: center;
+        padding: 0;
+        transition: background 120ms ease, color 120ms ease;
+        width: 34px;
+      }
+
+      .bl-tab:hover {
+        background: rgba(39, 116, 93, 0.12);
+        color: #245f4d;
+      }
+
+      .bl-tab.active {
+        background: #27745d;
+        color: #fffaf0;
+      }
+
+      .bl-tab.loading {
+        animation: bl-pulse 900ms ease-in-out infinite;
+      }
+
+      @keyframes bl-pulse {
+        0%, 100% { opacity: 0.5; }
+        50% { opacity: 1; }
+      }
+
+      .bl-main {
+        display: flex;
+        flex: 1 1 auto;
+        flex-direction: column;
+        min-width: 0;
       }
 
       .bl-head {
@@ -161,6 +328,8 @@ function template(state: PopupLookupState): string {
       }
 
       .bl-body {
+        max-height: 340px;
+        overflow-y: auto;
         padding: 11px 14px 13px;
       }
 
@@ -217,11 +386,6 @@ function template(state: PopupLookupState): string {
         margin: 0;
       }
 
-      .bl-synonyms {
-        color: #765c45;
-        margin-top: 6px;
-      }
-
       .bl-examples {
         color: #4a3a2c;
         font-family: ui-sans-serif, system-ui, sans-serif;
@@ -238,6 +402,11 @@ function template(state: PopupLookupState): string {
         padding-left: 8px;
       }
 
+      .bl-synonyms {
+        color: #765c45;
+        margin-top: 6px;
+      }
+
       .bl-status {
         color: #5f4a38;
       }
@@ -246,43 +415,118 @@ function template(state: PopupLookupState): string {
         color: #9f2d20;
       }
 
-      .bl-links {
-        border-top: 1px solid rgba(45, 31, 19, 0.1);
-        display: flex;
-        flex-wrap: wrap;
-        gap: 7px;
-        margin-top: 11px;
-        padding-top: 10px;
+      /* Translate panel */
+      .bl-translate {
+        font-family: ui-sans-serif, system-ui, sans-serif;
       }
 
-      .bl-links a {
-        background: rgba(39, 116, 93, 0.1);
+      .bl-tl-row {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+
+      .bl-tl-lang {
+        color: #8a6a4c;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .bl-tl-text {
+        font-size: 17px;
+        line-height: 1.3;
+      }
+
+      .bl-tl-out {
+        color: #1f5946;
+        font-weight: 600;
+      }
+
+      .bl-tl-sep {
+        color: #b08a5e;
+        font-size: 14px;
+        margin: 7px 0;
+      }
+
+      .bl-badge {
+        background: rgba(176, 138, 94, 0.14);
         border-radius: 6px;
-        color: #245f4d;
-        font-family: ui-sans-serif, system-ui, sans-serif;
-        font-size: 12px;
+        color: #7a5a3a;
+        display: inline-block;
+        font-size: 10px;
         font-weight: 700;
-        line-height: 1;
-        padding: 7px 8px;
+        letter-spacing: 0.03em;
+        margin-top: 12px;
+        padding: 4px 7px;
+        text-transform: uppercase;
+      }
+
+      /* Wikipedia panel */
+      .bl-wiki {
+        font-family: ui-sans-serif, system-ui, sans-serif;
+      }
+
+      .bl-wiki h3 {
+        font-size: 15px;
+        margin: 0 0 6px;
+      }
+
+      .bl-wiki p {
+        font-size: 13px;
+        line-height: 1.5;
+        margin: 0;
+      }
+
+      .bl-readmore,
+      .bl-weblinks a {
+        color: #245f4d;
+        font-weight: 700;
         text-decoration: none;
       }
 
-      .bl-links a:hover {
-        background: rgba(39, 116, 93, 0.16);
+      .bl-readmore {
+        display: inline-block;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        font-size: 12px;
+        margin-top: 10px;
+      }
+
+      .bl-weblinks {
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+
+      .bl-weblinks a {
+        align-items: center;
+        background: rgba(39, 116, 93, 0.1);
+        border-radius: 7px;
+        display: flex;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        font-size: 13px;
+        justify-content: space-between;
+        padding: 9px 11px;
+      }
+
+      .bl-weblinks a:hover {
+        background: rgba(39, 116, 93, 0.18);
       }
     </style>
     <section class="bl-shell" role="dialog" aria-label="BhashaLens dictionary result">
-      <header class="bl-head">
-        <div>
-          <h2 class="bl-word">${escapeHtml(state.word)}</h2>
-          <div class="bl-lang">Bengali</div>
+      ${renderRail(state)}
+      <div class="bl-main">
+        <header class="bl-head">
+          <div>
+            <h2 class="bl-word" lang="bn">${escapeHtml(state.word)}</h2>
+            <div class="bl-lang">Bengali${hasRail ? ` · ${escapeHtml(state.activePanel ?? "dictionary")}` : ""}</div>
+          </div>
+          <button class="bl-close" type="button" aria-label="Close dictionary popup">×</button>
+        </header>
+        <div class="bl-body">
+          ${renderActivePanel(state)}
         </div>
-        <button class="bl-close" type="button" aria-label="Close dictionary popup">×</button>
-      </header>
-      <div class="bl-body">
-        ${renderMorphology(state)}
-        ${renderEntries(state)}
-        ${renderExternalLinks(state)}
       </div>
     </section>
   `;
@@ -294,11 +538,13 @@ export class FloatingDictionaryPopup implements PopupController {
   private host?: HTMLDivElement;
   private lastAnchor?: DOMRect;
   private readonly onHide?: () => void;
+  private readonly onSelectPanel?: (panel: PanelId) => void;
   private shadow?: ShadowRoot;
 
   constructor(doc: Document = document, options: FloatingDictionaryPopupOptions = {}) {
     this.doc = doc;
     this.onHide = options.onHide;
+    this.onSelectPanel = options.onSelectPanel;
   }
 
   contains(node: Node): boolean {
@@ -399,5 +645,16 @@ export class FloatingDictionaryPopup implements PopupController {
 
     this.shadow.innerHTML = template(state);
     this.shadow.querySelector(".bl-close")?.addEventListener("click", () => this.hide());
+
+    if (this.onSelectPanel) {
+      this.shadow.querySelectorAll<HTMLButtonElement>(".bl-tab").forEach((button) => {
+        button.addEventListener("click", () => {
+          const panel = button.dataset.panel as PanelId | undefined;
+          if (panel) {
+            this.onSelectPanel?.(panel);
+          }
+        });
+      });
+    }
   }
 }

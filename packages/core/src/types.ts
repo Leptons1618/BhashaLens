@@ -74,13 +74,49 @@ export interface ExternalLookupLink {
   url: string;
 }
 
+export interface TranslationResult {
+  cached: boolean;
+  found: boolean;
+  provider: string;
+  translation: string | null;
+  word: string;
+}
+
+export interface TranslationProvider {
+  translate(word: string, from?: string, to?: string, signal?: AbortSignal): Promise<TranslationResult>;
+}
+
+/** Definer-style side panels: alternative ways to read a word's meaning. */
+export type PanelId = "dictionary" | "translate" | "wikipedia" | "web";
+
+export interface PanelDescriptor {
+  icon: string;
+  id: PanelId;
+  label: string;
+}
+
+export interface PanelState {
+  cached?: boolean;
+  error?: string;
+  links?: ExternalLookupLink[];
+  provider?: string;
+  status: LookupStateStatus | "idle";
+  summary?: string;
+  title?: string;
+  translation?: string;
+  url?: string;
+}
+
 export interface PopupLookupState {
+  activePanel?: PanelId;
   error?: string;
   externalLinks?: ExternalLookupLink[];
   lookupWord?: string;
   matchedCandidate?: MorphologyCandidate;
   morphology?: MorphologyAnalysis;
   normalized: string;
+  panelStates?: Partial<Record<PanelId, PanelState>>;
+  panels?: PanelDescriptor[];
   response?: LookupResponse;
   status: LookupStateStatus;
   word: string;

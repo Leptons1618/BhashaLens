@@ -57,6 +57,20 @@ export function ensureSchema(sqlite: Database.Database): void {
       entry_count INTEGER NOT NULL DEFAULT 0,
       imported_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
+
+    CREATE TABLE IF NOT EXISTS translation_cache (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      lang TEXT NOT NULL,
+      normalized TEXT NOT NULL,
+      target_lang TEXT NOT NULL,
+      word TEXT NOT NULL,
+      translation TEXT NOT NULL,
+      provider TEXT NOT NULL DEFAULT 'google-translate',
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS translation_cache_unique_idx
+      ON translation_cache(lang, normalized, target_lang);
   `);
 
   // Idempotent migration for databases created before the ipa column existed.
