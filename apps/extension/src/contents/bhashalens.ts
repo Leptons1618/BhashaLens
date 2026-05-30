@@ -1,4 +1,4 @@
-import { BengaliAdapter, BhashaLens, RestDictionaryProvider, RestTranslationProvider } from "@bhashalens/core";
+import { BengaliAdapter, BhashaLens, RestDictionaryProvider, RestSearchProvider, RestTranslationProvider } from "@bhashalens/core";
 import type { PlasmoCSConfig } from "plasmo";
 import { readExtensionSettings } from "../settings.js";
 
@@ -29,6 +29,12 @@ async function startLens(): Promise<void> {
     document,
     highlight: true,
     maxSelectionChars: 48,
+    blockNativeMenu: settings.blockNativeMenu,
+    enabledPanels: settings.panels,
+    theme: settings.theme,
+    size: settings.size,
+    translateTo: settings.translateTo,
+    wikipediaLang: settings.wikipediaLang,
     provider: new RestDictionaryProvider({
       baseUrl: settings.apiBaseUrl,
       cacheTtlMs: 5 * 60 * 1000,
@@ -39,10 +45,13 @@ async function startLens(): Promise<void> {
     translationProvider: new RestTranslationProvider({
       baseUrl: settings.apiBaseUrl,
       defaultFrom: "bn",
-      defaultTo: "en",
+      defaultTo: settings.translateTo,
       timeoutMs: 3000
     }),
-    wikipediaLang: "bn",
+    searchProvider: new RestSearchProvider({
+      baseUrl: settings.apiBaseUrl,
+      timeoutMs: 4500
+    }),
     onError: (error) => {
       console.debug("[BhashaLens] lookup failed", error);
     }
@@ -54,12 +63,10 @@ async function startLens(): Promise<void> {
 void startLens();
 
 if (typeof chrome !== "undefined" && chrome.storage?.onChanged) {
-  chrome.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName !== "sync") {
-      return;
-    }
-
-    if (changes.enabled || changes.apiBaseUrl || changes.activation) {
+  chrome.storage.onChanged.addListener((_changes, areaName) => {
+    // Any setting change rebuilds the lens so trigger, theme, size, sources,
+    // languages, and suppression all take effect in open tabs immediately.
+    if (areaName === "sync") {
       void startLens();
     }
   });

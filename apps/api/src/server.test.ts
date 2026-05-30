@@ -158,6 +158,33 @@ describe("admin API", () => {
     await app.close();
   });
 
+  it("returns grouped web search results and caches them", async () => {
+    const dbContext = createDbContext(":memory:");
+    let ddgCalls = 0;
+    const app = await createServer({
+      dbContext,
+      logger: false,
+      search: {
+        duckduckgo: async (q) => {
+          ddgCalls += 1;
+          return [{ title: "Result for " + q, snippet: "A snippet.", url: "https://example.com" }];
+        },
+        google: async () => []
+      }
+    });
+
+    const first = (await app.inject({ method: "GET", url: "/search?q=%E0%A6%A8%E0%A6%A6%E0%A7%80&engines=duckduckgo,google" })).json();
+    expect(first.groups).toHaveLength(2);
+    const ddg = first.groups.find((g: { engine: string }) => g.engine === "duckduckgo");
+    expect(ddg.label).toBe("DuckDuckGo");
+    expect(ddg.items[0].title).toContain("Result for");
+
+    await app.inject({ method: "GET", url: "/search?q=%E0%A6%A8%E0%A6%A6%E0%A7%80&engines=duckduckgo" });
+    expect(ddgCalls).toBe(1); // second call served from cache
+
+    await app.close();
+  });
+
   it("serves the admin editor page", async () => {
     const dbContext = createDbContext(":memory:");
     const app = await createServer({ dbContext, logger: false });

@@ -3,6 +3,8 @@ import type {
   DictionaryProvider,
   LanguageCode,
   LookupResponse,
+  SearchProvider,
+  SearchResponse,
   TranslationProvider,
   TranslationResult
 } from "./types.js";
@@ -173,6 +175,58 @@ export class RestTranslationProvider implements TranslationProvider {
       }
 
       return (await response.json()) as TranslationResult;
+    } finally {
+      globalThis.clearTimeout(timeout);
+      signal?.removeEventListener("abort", abort);
+    }
+  }
+}
+
+export interface RestSearchProviderOptions {
+  baseUrl: string;
+  defaultEngines?: string[];
+  fetcher?: typeof fetch;
+  timeoutMs?: number;
+}
+
+/** Calls the BhashaLens `/search` endpoint (DuckDuckGo + best-effort Google). */
+export class RestSearchProvider implements SearchProvider {
+  private readonly baseUrl: string;
+  private readonly defaultEngines: string[];
+  private readonly fetcher: typeof fetch;
+  private readonly timeoutMs: number;
+
+  constructor(options: RestSearchProviderOptions) {
+    this.baseUrl = options.baseUrl.replace(/\/+$/, "");
+    this.defaultEngines = options.defaultEngines ?? ["duckduckgo", "google"];
+    this.fetcher = options.fetcher ?? fetch.bind(globalThis);
+    this.timeoutMs = options.timeoutMs ?? 4000;
+  }
+
+  async search(query: string, engines: string[] = this.defaultEngines, signal?: AbortSignal): Promise<SearchResponse> {
+    const normalized = query.normalize("NFC").trim();
+    const empty: SearchResponse = { groups: [], query: normalized };
+    if (normalized.length === 0) {
+      return empty;
+    }
+
+    const controller = new AbortController();
+    const timeout = globalThis.setTimeout(() => controller.abort(), this.timeoutMs);
+    const abort = () => controller.abort();
+    signal?.addEventListener("abort", abort, { once: true });
+
+    try {
+      const params = new URLSearchParams({ engines: engines.join(","), q: normalized });
+      const response = await this.fetcher(`${this.baseUrl}/search?${params.toString()}`, {
+        headers: { accept: "application/json" },
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        return empty;
+      }
+
+      return (await response.json()) as SearchResponse;
     } finally {
       globalThis.clearTimeout(timeout);
       signal?.removeEventListener("abort", abort);

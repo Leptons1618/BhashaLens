@@ -86,6 +86,30 @@ export interface TranslationProvider {
   translate(word: string, from?: string, to?: string, signal?: AbortSignal): Promise<TranslationResult>;
 }
 
+export interface SearchItem {
+  snippet: string;
+  title: string;
+  url: string;
+}
+
+export interface SearchGroup {
+  engine: string;
+  items: SearchItem[];
+  label: string;
+}
+
+export interface SearchResponse {
+  groups: SearchGroup[];
+  query: string;
+}
+
+export interface SearchProvider {
+  search(query: string, engines?: string[], signal?: AbortSignal): Promise<SearchResponse>;
+}
+
+export type PopupTheme = "parchment" | "green" | "dark" | "light";
+export type PopupSize = "small" | "medium" | "large";
+
 /** Definer-style side panels: alternative ways to read a word's meaning. */
 export type PanelId = "dictionary" | "translate" | "wikipedia" | "web";
 
@@ -100,6 +124,7 @@ export interface PanelState {
   error?: string;
   links?: ExternalLookupLink[];
   provider?: string;
+  searchGroups?: SearchGroup[];
   status: LookupStateStatus | "idle";
   summary?: string;
   title?: string;

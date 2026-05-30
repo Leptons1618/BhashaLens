@@ -69,10 +69,26 @@ For live-reload during development use `pnpm --filter @bhashalens/extension dev`
 - Presents a Definer-style left tab rail: **Dictionary**, **Translate**, **Wikipedia**, **Web**.
 - When no dictionary entry exists, auto-falls back to a cached machine translation
   (`/translate`) and offers a Bengali Wikipedia summary — clearly labelled as machine output.
+- The **Web** tab shows inline DuckDuckGo result snippets (via `/search`) plus a
+  best-effort Google block (Google is link-only when it blocks scraping).
+- On **Select** trigger, suppresses the browser's native context menu so the bubble
+  is the immediate, top-priority response (Alt+right-click bypasses).
 - Highlights the active word with an inline underline overlay.
 - Caches lookup results in the content script for responsive repeat lookups.
 - Uses conservative Bengali suffix stripping to try root-form fallback lookups.
-- Keeps language adapters, dictionary providers, and translation providers pluggable.
+- Keeps language adapters, dictionary, translation, and search providers pluggable.
+
+### Configuring the bubble
+
+Click the toolbar icon for a tabbed settings panel:
+
+- **General** — enable/disable, trigger (Select / Click / Both), "bubble first on
+  select", theme (Parchment / Green / Dark / Light), and bubble size (S / M / L).
+- **Sources** — the lookup API URL + connection status, which tabs/data sources the
+  bubble shows (Dictionary is always on), Wikipedia language, and translate target.
+- **Test** — try a lookup against the API without leaving the popup.
+
+Changes save instantly and open tabs pick them up without reloading.
 
 The popup workflow borrows proven Yomitan/Yomichan concepts: selection monitoring, pointer word scanning, fast local state, cached lookups, keyboard dismissal, and no page navigation.
 
@@ -120,6 +136,26 @@ GET /translate?word=সতর্কীকরণ&from=bn&to=en
 
 ```json
 { "found": true, "translation": "warning", "provider": "google-translate", "cached": false, "latencyMs": 382 }
+```
+
+### Web search
+
+Backs the bubble's **Web** tab. DuckDuckGo is scraped reliably; Google is
+best-effort and returns `[]` when it blocks the request (the UI then shows a
+plain "open in Google" link). Results are cached in-memory for 30 minutes.
+
+```http
+GET /search?q=সতর্কীকরণ&engines=duckduckgo,google
+```
+
+```json
+{
+  "query": "সতর্কীকরণ",
+  "groups": [
+    { "engine": "duckduckgo", "label": "DuckDuckGo", "items": [{ "title": "…", "snippet": "…", "url": "…" }] },
+    { "engine": "google", "label": "Google", "items": [] }
+  ]
+}
 ```
 
 ### Admin dictionary editor

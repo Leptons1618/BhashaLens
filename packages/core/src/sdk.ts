@@ -15,6 +15,9 @@ import type {
   PanelState,
   PopupController,
   PopupLookupState,
+  PopupSize,
+  PopupTheme,
+  SearchProvider,
   TranslationProvider,
   WordSpan
 } from "./types.js";
@@ -33,10 +36,20 @@ export interface BhashaLensOptions {
   provider: DictionaryProvider;
   /** Optional machine-translation fallback for words with no dictionary entry. */
   translationProvider?: TranslationProvider;
+  /** Optional web-search provider backing the "Web" panel. */
+  searchProvider?: SearchProvider;
   /** Target language for the translate panel (default "en"). */
   translateTo?: string;
   /** Wikipedia subdomain to query for the Wikipedia panel (default "bn"). */
   wikipediaLang?: string;
+  /** Which side panels to show, in order. Defaults to all available. */
+  enabledPanels?: PanelId[];
+  /** Bubble theme. */
+  theme?: PopupTheme;
+  /** Bubble size. */
+  size?: PopupSize;
+  /** Suppress the browser's native context menu over a Bengali selection. */
+  blockNativeMenu?: boolean;
   /** Inject a fetch implementation (mainly for tests). */
   fetcher?: typeof fetch;
 }
@@ -186,8 +199,10 @@ export class BhashaLens {
   private readonly popup: PopupController;
   private readonly provider: DictionaryProvider;
   private readonly translationProvider?: TranslationProvider;
+  private readonly searchProvider?: SearchProvider;
   private readonly translateTo: string;
   private readonly wikipediaLang: string;
+  private readonly blockNativeMenu: boolean;
   private readonly fetcher?: typeof fetch;
   private readonly panels: PanelDescriptor[];
   private currentState?: PopupLookupState;
@@ -205,15 +220,33 @@ export class BhashaLens {
     this.onLookupStart = options.onLookupStart;
     this.provider = options.provider;
     this.translationProvider = options.translationProvider;
+    this.searchProvider = options.searchProvider;
     this.translateTo = options.translateTo ?? "en";
     this.wikipediaLang = options.wikipediaLang ?? "bn";
+    this.blockNativeMenu = options.blockNativeMenu ?? false;
     this.fetcher = options.fetcher;
-    this.panels = DEFAULT_PANELS.filter((panel) => panel.id !== "translate" || Boolean(this.translationProvider));
+
+    const enabled = options.enabledPanels;
+    this.panels = DEFAULT_PANELS.filter((panel) => {
+      if (enabled && !enabled.includes(panel.id)) {
+        return false;
+      }
+      if (panel.id === "translate") {
+        return Boolean(this.translationProvider);
+      }
+      if (panel.id === "web") {
+        return Boolean(this.searchProvider);
+      }
+      return true;
+    });
+
     this.popup =
       options.popup ??
       new FloatingDictionaryPopup(this.doc, {
         onHide: () => this.highlighter?.clear(),
-        onSelectPanel: this.handlePanelSelect
+        onSelectPanel: this.handlePanelSelect,
+        size: options.size,
+        theme: options.theme
       });
   }
 
@@ -227,6 +260,7 @@ export class BhashaLens {
     this.doc.removeEventListener("keydown", this.handleKeyDown, true);
     this.doc.removeEventListener("pointerdown", this.handlePointerDown, true);
     this.doc.removeEventListener("pointerup", this.handlePointerUp, true);
+    this.doc.removeEventListener("contextmenu", this.handleContextMenu, true);
     win?.removeEventListener("scroll", this.handleScroll, true);
     this.abortController?.abort();
     this.highlighter?.clear();
@@ -244,6 +278,7 @@ export class BhashaLens {
     this.doc.addEventListener("keydown", this.handleKeyDown, true);
     this.doc.addEventListener("pointerdown", this.handlePointerDown, true);
     this.doc.addEventListener("pointerup", this.handlePointerUp, true);
+    this.doc.addEventListener("contextmenu", this.handleContextMenu, true);
     win?.addEventListener("scroll", this.handleScroll, true);
     this.mounted = true;
   }
@@ -398,6 +433,37 @@ export class BhashaLens {
     this.popup.hide();
   };
 
+  /**
+   * When enabled, suppress the browser's native context menu over a Bengali
+   * selection so our bubble is the immediate, top-priority response. Holding
+   * Alt while right-clicking bypasses this and restores the native menu.
+   * (Other installed extensions cannot be suppressed — browsers don't allow it.)
+   */
+  private readonly handleContextMenu = (event: MouseEvent): void => {
+    if (!this.blockNativeMenu || event.altKey) {
+      return;
+    }
+
+    const target = event.target;
+    const insidePopup = target instanceof Node && Boolean(this.popup.contains?.(target));
+    const selection = this.doc.getSelection();
+    const hasBengaliSelection = Boolean(
+      selection && !selection.isCollapsed && this.adapter.detect(selection.toString())
+    );
+
+    if (!insidePopup && !hasBengaliSelection) {
+      return;
+    }
+
+    event.preventDefault();
+    if (hasBengaliSelection && this.activation !== "click") {
+      const candidate = this.buildSelectionCandidate();
+      if (candidate) {
+        void this.lookupAndRender(candidate);
+      }
+    }
+  };
+
   private isUsableSpan(span: WordSpan | null): span is WordSpan {
     return Boolean(span && span.normalized.length >= this.minWordLength && this.adapter.detect(span.normalized));
   }
@@ -521,7 +587,7 @@ export class BhashaLens {
       return;
     }
 
-    if (panel === "web") {
+    if (panel === "web" && !this.searchProvider) {
       this.setPanelState(panel, { status: "ready", links: this.currentState.externalLinks ?? [] }, key);
       return;
     }
@@ -534,6 +600,20 @@ export class BhashaLens {
     this.setPanelState(panel, { status: "loading" }, key);
 
     try {
+      if (panel === "web") {
+        const response = await this.searchProvider!.search(context.normalized);
+        this.setPanelState(
+          panel,
+          {
+            links: this.currentState.externalLinks ?? [],
+            searchGroups: response.groups,
+            status: response.groups.length > 0 ? "ready" : "empty"
+          },
+          key
+        );
+        return;
+      }
+
       if (panel === "translate") {
         if (!this.translationProvider) {
           this.setPanelState(panel, { status: "empty" }, key);

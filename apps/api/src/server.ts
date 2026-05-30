@@ -13,6 +13,7 @@ import { registerAdminRoutes } from "./admin.js";
 import { closeDbContext, createDbContext, type DbContext } from "./db/client.js";
 import { dictionaryEntries, translationCache, type DictionaryEntryRow } from "./db/schema.js";
 import { createGoogleTranslator, type TranslateFn } from "./translate.js";
+import { duckDuckGoSearch, googleSearch, type SearchFn, type SearchItem } from "./search.js";
 
 interface LookupQuerystring {
   lang?: string;
@@ -25,6 +26,11 @@ interface TranslateQuerystring {
   to?: string;
 }
 
+interface SearchQuerystring {
+  q?: string;
+  engines?: string;
+}
+
 export interface CreateServerOptions {
   adapters?: LanguageAdapter[];
   corsOrigin?: boolean | string | RegExp | Array<boolean | string | RegExp>;
@@ -32,9 +38,13 @@ export interface CreateServerOptions {
   logger?: boolean;
   /** Inject a translator (tests pass a stub); defaults to the Google gtx endpoint. */
   translate?: TranslateFn;
+  /** Inject web-search engines (tests pass stubs). */
+  search?: Partial<Record<"duckduckgo" | "google", SearchFn>>;
   /** If set, /admin routes require this token via the x-admin-token header. */
   adminToken?: string;
 }
+
+const SEARCH_LABELS: Record<string, string> = { duckduckgo: "DuckDuckGo", google: "Google" };
 
 function buildAdapterRegistry(adapters: LanguageAdapter[]): Map<LanguageCode, LanguageAdapter> {
   return new Map(adapters.map((adapter) => [adapter.lang, adapter]));
@@ -91,6 +101,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
   const dbContext = options.dbContext ?? createDbContext();
   const adapters = buildAdapterRegistry(options.adapters ?? [new BengaliAdapter()]);
   const translate = options.translate ?? createGoogleTranslator();
+  const searchEngines: Record<"duckduckgo" | "google", SearchFn> = {
+    duckduckgo: options.search?.duckduckgo ?? duckDuckGoSearch,
+    google: options.search?.google ?? googleSearch
+  };
+  const searchCache = new Map<string, { expiresAt: number; items: SearchItem[] }>();
+  const SEARCH_TTL_MS = 30 * 60 * 1000;
   const app = Fastify({ logger: options.logger ?? true });
 
   await app.register(cors, {
@@ -249,6 +265,46 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
       translation,
       latencyMs: Math.round(performance.now() - started)
     };
+  });
+
+  app.get<{ Querystring: SearchQuerystring }>("/search", async (request, reply) => {
+    const query = readText(request.query.q);
+    if (!query) {
+      return reply.code(400).send({ error: "Missing required query parameter: q" });
+    }
+
+    const requested = (readText(request.query.engines) ?? "duckduckgo,google")
+      .split(",")
+      .map((engine) => engine.trim().toLowerCase())
+      .filter((engine): engine is "duckduckgo" | "google" => engine === "duckduckgo" || engine === "google");
+
+    const engines = requested.length > 0 ? requested : (["duckduckgo", "google"] as const);
+    const now = Date.now();
+
+    const groups = await Promise.all(
+      engines.map(async (engine) => {
+        const cacheKey = `${engine}:${query}`;
+        const cached = searchCache.get(cacheKey);
+        if (cached && cached.expiresAt > now) {
+          return { engine, items: cached.items, label: SEARCH_LABELS[engine] ?? engine };
+        }
+
+        let items: SearchItem[] = [];
+        try {
+          items = await searchEngines[engine](query);
+        } catch (error) {
+          app.log.warn({ engine, error }, "web search failed");
+        }
+
+        if (items.length > 0) {
+          searchCache.set(cacheKey, { expiresAt: now + SEARCH_TTL_MS, items });
+        }
+        return { engine, items, label: SEARCH_LABELS[engine] ?? engine };
+      })
+    );
+
+    reply.header("cache-control", "public, max-age=600");
+    return { groups, query };
   });
 
   registerAdminRoutes(app, dbContext, adapters.get("bn") ?? new BengaliAdapter(), {

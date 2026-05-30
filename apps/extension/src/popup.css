@@ -370,17 +370,152 @@ button:disabled {
   text-transform: uppercase;
 }
 
-.source {
-  color: #9a8369;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  position: absolute;
-  right: 11px;
-  text-transform: uppercase;
-  top: 11px;
-}
-
 .error {
   color: #9f2d20 !important;
+}
+
+/* Tabbed config UI */
+.tabs {
+  background: rgba(39, 27, 18, 0.07);
+  border-radius: 9px;
+  display: grid;
+  gap: 3px;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 16px 0 4px;
+  padding: 3px;
+}
+
+.tabs button {
+  background: transparent;
+  color: #604631;
+  font-weight: 700;
+  height: 32px;
+  min-width: 0;
+  padding: 0 8px;
+}
+
+.tabs button.active {
+  background: #fffaf0;
+  box-shadow: 0 1px 4px rgba(39, 27, 18, 0.12);
+  color: #271b12;
+}
+
+.panel {
+  padding-top: 6px;
+}
+
+.block {
+  border-top: 1px solid rgba(39, 27, 18, 0.1);
+  padding: 13px 0 0;
+}
+
+.block:first-child {
+  border-top: 0;
+}
+
+.block + .block {
+  margin-top: 13px;
+}
+
+.rowToggle {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin: 0;
+}
+
+.rowToggle span {
+  color: #271b12;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.rowToggle small {
+  color: #8a6244;
+  display: block;
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+.row2 {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.row2 input {
+  width: 100%;
+}
+
+.swatches {
+  display: flex;
+  gap: 8px;
+}
+
+.swatch {
+  align-items: center;
+  border: 2px solid rgba(39, 27, 18, 0.18);
+  border-radius: 9px;
+  cursor: pointer;
+  display: inline-flex;
+  height: 40px;
+  justify-content: center;
+  min-width: 0;
+  padding: 0;
+  width: 52px;
+}
+
+.swatch.active {
+  border-color: #27745d;
+  box-shadow: 0 0 0 2px rgba(39, 116, 93, 0.25);
+}
+
+.swatch i {
+  border-radius: 50%;
+  height: 14px;
+  width: 14px;
+}
+
+.sources {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sourceRow {
+  align-items: center;
+  background: #fffef9;
+  border: 1px solid rgba(39, 27, 18, 0.12);
+  border-radius: 9px;
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin: 0;
+  padding: 9px 11px;
+}
+
+.sourceRow.on {
+  border-color: rgba(39, 116, 93, 0.4);
+}
+
+.sourceRow.locked {
+  cursor: default;
+  opacity: 0.8;
+}
+
+.sourceRow span {
+  font-weight: 400;
+}
+
+.sourceRow strong {
+  color: #271b12;
+  display: block;
+  font-size: 13px;
+}
+
+.sourceRow small {
+  color: #8a6244;
 }
