@@ -15,7 +15,13 @@ These are candidate sources for growing BhashaLens beyond the curated seed. Revi
 ## Reproducible Pipeline
 
 The Bengali Wiktextract snapshot is **not committed**. Reproduce it from the
-source registry (`apps/api/src/db/sources.ts`):
+source registry (`apps/api/src/db/sources.ts`). The one-command path:
+
+```bash
+pnpm seed:all   # downloads the extract if missing, reseeds, and imports it
+```
+
+Equivalent individual steps:
 
 ```bash
 # 1. Download the Kaikki Bengali extract into downloads/ (+ a .manifest.json

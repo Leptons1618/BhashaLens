@@ -12,6 +12,9 @@
     "dev": "turbo dev --parallel",
     "lint": "turbo lint",
     "seed": "pnpm --filter @bhashalens/api seed",
+    "seed:all": "pnpm --filter @bhashalens/api seed:all",
+    "ext:build": "pnpm --filter @bhashalens/extension build:all",
+    "ext:package": "pnpm --filter @bhashalens/extension package:all",
     "test": "turbo test",
     "typecheck": "turbo typecheck"
   },

@@ -9,6 +9,7 @@ import cors from "@fastify/cors";
 import { and, eq } from "drizzle-orm";
 import Fastify, { type FastifyInstance } from "fastify";
 import { performance } from "node:perf_hooks";
+import { registerAdminRoutes } from "./admin.js";
 import { closeDbContext, createDbContext, type DbContext } from "./db/client.js";
 import { dictionaryEntries, translationCache, type DictionaryEntryRow } from "./db/schema.js";
 import { createGoogleTranslator, type TranslateFn } from "./translate.js";
@@ -31,6 +32,8 @@ export interface CreateServerOptions {
   logger?: boolean;
   /** Inject a translator (tests pass a stub); defaults to the Google gtx endpoint. */
   translate?: TranslateFn;
+  /** If set, /admin routes require this token via the x-admin-token header. */
+  adminToken?: string;
 }
 
 function buildAdapterRegistry(adapters: LanguageAdapter[]): Map<LanguageCode, LanguageAdapter> {
@@ -246,6 +249,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
       translation,
       latencyMs: Math.round(performance.now() - started)
     };
+  });
+
+  registerAdminRoutes(app, dbContext, adapters.get("bn") ?? new BengaliAdapter(), {
+    token: options.adminToken ?? process.env.ADMIN_TOKEN
   });
 
   app.addHook("onClose", async () => {

@@ -19,27 +19,46 @@ data/bn-dictionary  Seed Bengali dictionary data
 ```bash
 pnpm install
 pnpm build
-pnpm seed
+pnpm seed:all          # download Wiktextract + seed + import (one command)
 pnpm --filter @bhashalens/api dev
-pnpm --filter @bhashalens/extension dev
 ```
 
-The API defaults to `http://localhost:8787`. Load the Plasmo extension dev build in Chromium, then select Bengali text on any website. The extension popup can switch the trigger between `Select`, `Click`, and `Both`.
+`pnpm seed:all` downloads the Bengali Wiktextract snapshot if it is missing
+(~36 MB, intentionally not committed), reseeds the ~112 curated entries, and
+imports the full dataset on top — growing the dictionary to **~15k entries**
+with transliteration, IPA, usage examples, and synonyms. It is idempotent, so
+re-run it any time. Each import is recorded in a `dictionary_sources` table with
+its license (CC BY-SA 4.0). See [data/bn-dictionary/SOURCES.md](data/bn-dictionary/SOURCES.md).
 
-For the full dictionary, reproduce the Bengali Wiktextract snapshot from the
-source registry (it is intentionally not committed):
+The API defaults to `http://localhost:8787`. Then build/load the extension for
+your browser (below) and select Bengali text on any website. The toolbar popup
+switches the trigger between `Select`, `Click`, and `Both`.
+
+> Prefer the individual steps? `pnpm --filter @bhashalens/api fetch:source wiktextract`,
+> then `seed`, then `import:dictionary <file> --source wiktextract` still work.
+
+## Browser builds (Chrome, Edge, Firefox)
+
+Build production bundles for all three browsers:
 
 ```bash
-pnpm --filter @bhashalens/api migrate
-pnpm --filter @bhashalens/api fetch:source wiktextract        # downloads ~36 MB Kaikki extract + manifest
-pnpm --filter @bhashalens/api seed                            # curated starter entries
-pnpm --filter @bhashalens/api import:dictionary ../../downloads/bn-wiktextract.jsonl --source wiktextract
+pnpm ext:build         # → apps/extension/build/{chrome-mv3,edge-mv3,firefox-mv2}-prod
+pnpm ext:package       # also zip each one for sharing/store upload
 ```
 
-This grows the dictionary from ~112 curated entries to ~15k Wiktionary-derived
-entries with transliteration, IPA, usage examples, and synonyms. Each import is
-recorded in a `dictionary_sources` table with its license (CC BY-SA 4.0) and
-attribution. See [data/bn-dictionary/SOURCES.md](data/bn-dictionary/SOURCES.md).
+Or one at a time: `pnpm --filter @bhashalens/extension build:chrome` (`build:edge`, `build:firefox`).
+
+Load the unpacked build:
+
+- **Chrome / Edge** — open `chrome://extensions` (or `edge://extensions`),
+  enable Developer mode, **Load unpacked** →
+  `apps/extension/build/chrome-mv3-prod` (or `edge-mv3-prod`).
+- **Firefox** — open `about:debugging#/runtime/this-firefox`,
+  **Load Temporary Add-on** → pick any file inside
+  `apps/extension/build/firefox-mv2-prod` (e.g. `manifest.json`).
+
+For live-reload during development use `pnpm --filter @bhashalens/extension dev`
+(Chrome) or `dev:firefox`, which build to the matching `*-dev` folder.
 
 ## MVP Behavior
 
@@ -102,3 +121,11 @@ GET /translate?word=সতর্কীকরণ&from=bn&to=en
 ```json
 { "found": true, "translation": "warning", "provider": "google-translate", "cached": false, "latencyMs": 382 }
 ```
+
+### Admin dictionary editor
+
+With the API running, open `http://localhost:8787/admin` to browse, search,
+add, edit, and delete entries by hand. It is backed by a small CRUD API
+(`GET/POST /admin/entries`, `PUT/DELETE /admin/entries/:id`, `GET /admin/sources`).
+New entries default to the `manual` source. Set `ADMIN_TOKEN` to require an
+`x-admin-token` header (the page has a field that stores and sends it).

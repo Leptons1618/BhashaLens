@@ -6,7 +6,13 @@
   "type": "module",
   "scripts": {
     "build": "plasmo build",
+    "build:chrome": "plasmo build --target=chrome-mv3",
+    "build:edge": "plasmo build --target=edge-mv3",
+    "build:firefox": "plasmo build --target=firefox-mv2",
+    "build:all": "plasmo build --target=chrome-mv3 && plasmo build --target=edge-mv3 && plasmo build --target=firefox-mv2",
+    "package:all": "plasmo package --target=chrome-mv3 && plasmo package --target=edge-mv3 && plasmo package --target=firefox-mv2",
     "dev": "plasmo dev",
+    "dev:firefox": "plasmo dev --target=firefox-mv2",
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc -p tsconfig.json --noEmit"
@@ -30,6 +36,12 @@
     "name": "BhashaLens",
     "description": "Inline Bengali dictionary lookups on any website.",
     "permissions": ["storage"],
-    "host_permissions": ["<all_urls>"]
+    "host_permissions": ["<all_urls>"],
+    "browser_specific_settings": {
+      "gecko": {
+        "id": "bhashalens@bhashalens.app",
+        "strict_min_version": "109.0"
+      }
+    }
   }
 }

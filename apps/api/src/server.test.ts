@@ -103,3 +103,68 @@ describe("lookup API", () => {
     await app.close();
   });
 });
+
+describe("admin API", () => {
+  it("creates, lists, searches, updates, and deletes entries", async () => {
+    const dbContext = createDbContext(":memory:");
+    const app = await createServer({ dbContext, logger: false });
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/admin/entries",
+      payload: { word: "নদী", transliteration: "nodi", partOfSpeech: "noun", definition: "A river.", synonyms: "তটিনী, স্রোতস্বিনী" }
+    });
+    expect(created.statusCode).toBe(201);
+    const id = created.json().entry.id as number;
+    expect(created.json().entry.synonyms).toEqual(["তটিনী", "স্রোতস্বিনী"]);
+
+    const search = await app.inject({ method: "GET", url: "/admin/entries?q=nodi" });
+    expect(search.json().total).toBe(1);
+    expect(search.json().entries[0].word).toBe("নদী");
+
+    const updated = await app.inject({
+      method: "PUT",
+      url: `/admin/entries/${id}`,
+      payload: { word: "নদী", partOfSpeech: "noun", definition: "A flowing body of water." }
+    });
+    expect(updated.statusCode).toBe(200);
+    expect(updated.json().entry.definition).toBe("A flowing body of water.");
+
+    const removed = await app.inject({ method: "DELETE", url: `/admin/entries/${id}` });
+    expect(removed.statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: "/admin/entries" })).json().total).toBe(0);
+
+    await app.close();
+  });
+
+  it("rejects non-Bengali or definition-less entries", async () => {
+    const dbContext = createDbContext(":memory:");
+    const app = await createServer({ dbContext, logger: false });
+
+    expect((await app.inject({ method: "POST", url: "/admin/entries", payload: { word: "river", definition: "x" } })).statusCode).toBe(400);
+    expect((await app.inject({ method: "POST", url: "/admin/entries", payload: { word: "নদী" } })).statusCode).toBe(400);
+
+    await app.close();
+  });
+
+  it("enforces the admin token when configured", async () => {
+    const dbContext = createDbContext(":memory:");
+    const app = await createServer({ dbContext, logger: false, adminToken: "secret" });
+
+    expect((await app.inject({ method: "GET", url: "/admin/entries" })).statusCode).toBe(401);
+    const ok = await app.inject({ method: "GET", url: "/admin/entries", headers: { "x-admin-token": "secret" } });
+    expect(ok.statusCode).toBe(200);
+
+    await app.close();
+  });
+
+  it("serves the admin editor page", async () => {
+    const dbContext = createDbContext(":memory:");
+    const app = await createServer({ dbContext, logger: false });
+    const page = await app.inject({ method: "GET", url: "/admin" });
+    expect(page.statusCode).toBe(200);
+    expect(page.headers["content-type"]).toContain("text/html");
+    expect(page.body).toContain("Dictionary Admin");
+    await app.close();
+  });
+});

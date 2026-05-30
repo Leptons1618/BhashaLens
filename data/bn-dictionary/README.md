@@ -21,6 +21,14 @@ Large dictionary sources should be imported into SQLite through the API importer
 
 ## Import Commands
 
+The simplest path (download + seed + import, idempotent):
+
+```bash
+pnpm seed:all
+```
+
+The individual steps, if you want finer control:
+
 ```bash
 pnpm --filter @bhashalens/api migrate
 pnpm --filter @bhashalens/api seed
@@ -29,8 +37,8 @@ pnpm --filter @bhashalens/api import:dictionary ../../downloads/bn-wiktextract.j
 pnpm --filter @bhashalens/api import:dictionary ../../downloads/custom.tsv --format tsv --source custom
 ```
 
-> Run from the repo root; arguments after the script name are passed straight
-> through (no `--` separator needed with pnpm filters here).
+> Run the per-filter commands from the repo root; arguments after the script
+> name are passed straight through (no `--` separator needed with pnpm here).
 
 The importer currently supports:
 
