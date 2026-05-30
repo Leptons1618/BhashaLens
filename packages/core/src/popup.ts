@@ -96,15 +96,18 @@ const ICONS: Record<PanelId, string> = {
     '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h7"/><path d="M7 4c0 4.5-2 8-4 9"/><path d="M5 9c0 2 2.5 4 6 4"/><path d="m13 20 4-9 4 9"/><path d="M14.5 17h5"/></svg>',
   wikipedia:
     '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><text x="12" y="17" font-size="15" font-family="Georgia, serif" font-weight="700" text-anchor="middle">W</text></svg>',
-  web:
-    '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>'
+  google:
+    '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><text x="12" y="17.5" font-size="16" font-family="Arial, sans-serif" font-weight="700" text-anchor="middle">G</text></svg>',
+  duckduckgo:
+    '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M10 9.5a2 2 0 0 1 4 0v3a3.5 3.5 0 0 1-7 0" stroke-linecap="round"/></svg>'
 };
 
 export const DEFAULT_PANELS: PanelDescriptor[] = [
   { icon: ICONS.dictionary, id: "dictionary", label: "Dictionary" },
   { icon: ICONS.translate, id: "translate", label: "Translate" },
   { icon: ICONS.wikipedia, id: "wikipedia", label: "Wikipedia" },
-  { icon: ICONS.web, id: "web", label: "Web search" }
+  { icon: ICONS.duckduckgo, id: "duckduckgo", label: "DuckDuckGo" },
+  { icon: ICONS.google, id: "google", label: "Google" }
 ];
 
 function escapeHtml(value: string): string {
@@ -236,49 +239,43 @@ function renderWikipedia(state: PopupLookupState): string {
   `;
 }
 
-function renderWeb(state: PopupLookupState): string {
-  const panel = state.panelStates?.web;
+function renderSearch(state: PopupLookupState, engine: "google" | "duckduckgo"): string {
+  const panel = state.panelStates?.[engine];
+  const label = engine === "google" ? "Google" : "DuckDuckGo";
   if (!panel || panel.status === "idle" || panel.status === "loading") {
-    return `<div class="bl-status">Searching the web…</div>`;
+    return `<div class="bl-status">Searching ${label}…</div>`;
   }
 
   if (panel.status === "error") {
-    return `<div class="bl-status bl-error">${escapeHtml(panel.error ?? "Web search failed")}</div>`;
+    return `<div class="bl-status bl-error">${escapeHtml(panel.error ?? "Search failed")}</div>`;
   }
 
-  const groups = panel.searchGroups ?? [];
   const query = encodeURIComponent(state.word);
+  const fallbackUrl =
+    engine === "google" ? `https://www.google.com/search?q=${query}` : `https://duckduckgo.com/?q=${query}`;
+  const items = (panel.searchGroups ?? []).flatMap((group) => group.items);
 
-  const groupsHtml = groups
-    .map((group) => {
-      const items = group.items
-        .slice(0, 4)
-        .map(
-          (item) => `
-            <a class="bl-search-item" href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">
-              <span class="bl-search-title">${escapeHtml(item.title)}</span>
-              ${item.snippet ? `<span class="bl-search-snippet">${escapeHtml(item.snippet)}</span>` : ""}
-            </a>`
-        )
-        .join("");
+  if (items.length === 0) {
+    return `
+      <div class="bl-search">
+        <div class="bl-status">No inline ${label} results${engine === "google" ? " (Google often blocks automated lookups)" : ""}.</div>
+        <a class="bl-search-open" href="${fallbackUrl}" target="_blank" rel="noopener noreferrer">Open ${label} search ↗</a>
+      </div>
+    `;
+  }
 
-      const fallbackUrl =
-        group.engine === "google"
-          ? `https://www.google.com/search?q=${query}`
-          : `https://duckduckgo.com/?q=${query}`;
-      const body = group.items.length
-        ? items
-        : `<a class="bl-search-open" href="${fallbackUrl}" target="_blank" rel="noopener noreferrer">Open ${escapeHtml(group.label)} search ↗</a>`;
-
-      return `<div class="bl-search-group"><div class="bl-search-engine">${escapeHtml(group.label)}</div>${body}</div>`;
-    })
+  const itemsHtml = items
+    .slice(0, 5)
+    .map(
+      (item) => `
+        <a class="bl-search-item" href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">
+          <span class="bl-search-title">${escapeHtml(item.title)}</span>
+          ${item.snippet ? `<span class="bl-search-snippet">${escapeHtml(item.snippet)}</span>` : ""}
+        </a>`
+    )
     .join("");
 
-  if (groupsHtml.length === 0) {
-    return `<div class="bl-status">No web results.</div>`;
-  }
-
-  return `<div class="bl-search">${groupsHtml}</div>`;
+  return `<div class="bl-search"><div class="bl-search-engine">${escapeHtml(label)}</div>${itemsHtml}</div>`;
 }
 
 function renderActivePanel(state: PopupLookupState): string {
@@ -287,8 +284,10 @@ function renderActivePanel(state: PopupLookupState): string {
       return renderTranslate(state);
     case "wikipedia":
       return renderWikipedia(state);
-    case "web":
-      return renderWeb(state);
+    case "google":
+      return renderSearch(state, "google");
+    case "duckduckgo":
+      return renderSearch(state, "duckduckgo");
     default:
       return `${renderMorphology(state)}${renderEntries(state)}`;
   }

@@ -15,7 +15,7 @@ export interface WordSpan {
 export interface MorphologyCandidate {
   confidence: number;
   normalized: string;
-  reason: "exact" | "suffix-strip";
+  reason: "exact" | "suffix-strip" | "lemma";
   suffix?: string;
 }
 
@@ -111,7 +111,7 @@ export type PopupTheme = "parchment" | "green" | "dark" | "light";
 export type PopupSize = "small" | "medium" | "large";
 
 /** Definer-style side panels: alternative ways to read a word's meaning. */
-export type PanelId = "dictionary" | "translate" | "wikipedia" | "web";
+export type PanelId = "dictionary" | "translate" | "wikipedia" | "google" | "duckduckgo";
 
 export interface PanelDescriptor {
   icon: string;

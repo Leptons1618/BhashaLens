@@ -48,6 +48,19 @@ export const SOURCE_REGISTRY: Record<string, DictionarySource> = {
     description:
       "Structured Bengali headwords with English glosses, romanization, IPA, usage examples, and synonyms. Same family of data that powers modern Yomitan dictionaries."
   },
+  "bengali-thesaurus": {
+    key: "bengali-thesaurus",
+    title: "Bengali thesaurus (MinhasKamal/BengaliDictionary)",
+    format: "json",
+    downloadUrl: "https://raw.githubusercontent.com/MinhasKamal/BengaliDictionary/master/BengaliDictionary.json",
+    localPath: "downloads/bn-thesaurus.json",
+    homepage: "https://github.com/MinhasKamal/BengaliDictionary",
+    license: "GPL-3.0",
+    licenseUrl: "https://www.gnu.org/licenses/gpl-3.0.html",
+    attribution: "Bengali headwords and Bengali synonyms from MinhasKamal/BengaliDictionary (GPL-3.0).",
+    description:
+      "Bengali-headword → Bengali-synonym data (a bn→bn thesaurus) with romanization. Copyleft (GPL-3.0): kept as a separate, opt-in source — not bundled into `seed:all`."
+  },
   seed: {
     key: "seed",
     title: "BhashaLens curated seed",

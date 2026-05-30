@@ -12,7 +12,7 @@ export interface BhashaLensSettings {
   wikipediaLang: string;
 }
 
-export const ALL_PANELS: PanelId[] = ["dictionary", "translate", "wikipedia", "web"];
+export const ALL_PANELS: PanelId[] = ["dictionary", "translate", "wikipedia", "duckduckgo", "google"];
 export const THEMES: PopupTheme[] = ["parchment", "green", "dark", "light"];
 export const SIZES: PopupSize[] = ["small", "medium", "large"];
 
@@ -21,7 +21,7 @@ export const DEFAULT_SETTINGS: BhashaLensSettings = {
   apiBaseUrl: "http://localhost:8787",
   blockNativeMenu: true,
   enabled: true,
-  panels: ["dictionary", "translate", "wikipedia", "web"],
+  panels: ["dictionary", "translate", "wikipedia", "duckduckgo", "google"],
   size: "medium",
   theme: "parchment",
   translateTo: "en",

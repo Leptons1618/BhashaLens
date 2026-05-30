@@ -248,6 +248,31 @@ export function parseDictionaryRecord(raw: unknown, source = "import"): Dictiona
   return fromRecord(raw, source);
 }
 
+/** Map a MinhasKamal/BengaliDictionary record to a bn→bn thesaurus entry. */
+function fromBengaliThesaurus(record: Record<string, unknown>, source: string): DictionaryEntry[] {
+  const word = readString(record.bn);
+  if (!word) {
+    return [];
+  }
+
+  const synonyms = readStringArray(record.bn_syns);
+  const english = readString(record.en);
+  // Prefer a Bengali (synonym) definition; fall back to the English gloss.
+  const definition = synonyms?.length ? synonyms.join("; ") : english;
+  if (!definition) {
+    return [];
+  }
+
+  const pron = Array.isArray(record.pron) ? record.pron.map(readString).filter((value): value is string => Boolean(value)) : [];
+  const transliteration = pron[1] ?? pron[0] ?? "";
+
+  const entry = normalizeEntry(
+    { definition, partOfSpeech: "unknown", source, synonyms, transliteration, word },
+    source
+  );
+  return entry ? [entry] : [];
+}
+
 function fromRecord(raw: unknown, source: string): DictionaryEntry[] {
   if (!raw || typeof raw !== "object") {
     return [];
@@ -256,6 +281,11 @@ function fromRecord(raw: unknown, source: string): DictionaryEntry[] {
   const record = raw as Record<string, unknown>;
   if (record.lang_code === "bn" && Array.isArray(record.senses)) {
     return fromWiktextract(record as WiktextractEntry, source);
+  }
+
+  // bn→bn thesaurus shape: { bn, bn_syns, en, pron } (MinhasKamal/BengaliDictionary).
+  if (typeof record.bn === "string") {
+    return fromBengaliThesaurus(record, source);
   }
 
   const entry = normalizeEntry(
@@ -281,7 +311,8 @@ function parseTsvLine(line: string): string[] {
 }
 
 async function loadJsonEntries(filePath: string, source: string): Promise<DictionaryEntry[]> {
-  const parsed = JSON.parse(await readFile(filePath, "utf8")) as unknown;
+  const raw = (await readFile(filePath, "utf8")).replace(/^﻿/, "");
+  const parsed = JSON.parse(raw) as unknown;
   if (!Array.isArray(parsed)) {
     return fromRecord(parsed, source);
   }

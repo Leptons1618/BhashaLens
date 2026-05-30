@@ -1,32 +1,109 @@
 import type { LanguageAdapter, MorphologyAnalysis, MorphologyCandidate, WordSpan } from "./types.js";
 
-export const BENGALI_BLOCK_RE = /[\u0980-\u09FF]/u;
+export const BENGALI_BLOCK_RE = /[ঀ-৿]/u;
 
 const BENGALI_WORD_CHAR_RE =
-  /[\u0981-\u0983\u0985-\u098C\u098F-\u0990\u0993-\u09A8\u09AA-\u09B0\u09B2\u09B6-\u09B9\u09BC\u09BE-\u09C4\u09C7-\u09C8\u09CB-\u09CD\u09D7\u09CE\u09DC-\u09DD\u09DF-\u09E3\u09F0-\u09F1\u200C\u200D]/u;
+  /[ঁ-ঃঅ-ঌএ-ঐও-নপ-রলশ-হ়া-ৄে-ৈো-্ৗৎড়-ঢ়য়-ৣৰ-ৱ‌‍]/u;
 
-const BENGALI_SUFFIXES = [
-  "গুলোকে",
-  "গুলিতে",
-  "গুলোর",
-  "গুলো",
-  "গুলি",
-  "দেরকে",
-  "দের",
-  "টাকে",
-  "টাতে",
-  "টার",
-  "গুলোয়",
-  "টির",
-  "টিকে",
-  "টিতে",
-  "ের",
-  "কে",
-  "তে",
-  "টা",
-  "টি",
-  "রা"
+interface BengaliSuffix {
+  /** The suffix string to strip. */
+  value: string;
+  /** Verbal inflection — its stem can be lemmatized to an infinitive (root + "া"). */
+  verb?: boolean;
+}
+
+/**
+ * Bengali inflectional/derivational suffixes, grouped by role. Longest forms
+ * are tried first (see SORTED_SUFFIXES) so multi-morpheme endings like "গুলোকে"
+ * strip before "কে". Stripping is multi-pass, so layered forms such as
+ * বইগুলোকে → বইগুলো → বই also resolve.
+ */
+const BENGALI_SUFFIXES: BengaliSuffix[] = [
+  // Plural + classifier + case stacks
+  { value: "গুলোকে" },
+  { value: "গুলিকে" },
+  { value: "গুলোতে" },
+  { value: "গুলিতে" },
+  { value: "গুলোয়" },
+  { value: "গুলোর" },
+  { value: "গুলির" },
+  { value: "গুলো" },
+  { value: "গুলি" },
+  { value: "গুলা" },
+  { value: "দেরকে" },
+  { value: "দিগের" },
+  { value: "দের" },
+  { value: "েরা" },
+  { value: "রা" },
+  // Classifiers (definite) + case
+  { value: "টাকে" },
+  { value: "টিকে" },
+  { value: "টাতে" },
+  { value: "টিতে" },
+  { value: "টার" },
+  { value: "টির" },
+  { value: "খানা" },
+  { value: "খানি" },
+  { value: "টুকু" },
+  { value: "টা" },
+  { value: "টি" },
+  // Case / postpositional markers
+  { value: "েতে" },
+  { value: "ের" },
+  { value: "কে" },
+  { value: "রে" },
+  { value: "তে" },
+  { value: "য়ে" },
+  { value: "য়" },
+  // Emphatic particles
+  { value: "ই" },
+  { value: "ও" },
+  // Verbal inflections (person / tense / aspect) — enable lemmatization
+  { value: "েছিলাম", verb: true },
+  { value: "েছিলেন", verb: true },
+  { value: "েছিলে", verb: true },
+  { value: "িয়েছি", verb: true },
+  { value: "েছেন", verb: true },
+  { value: "েছিস", verb: true },
+  { value: "েছি", verb: true },
+  { value: "েছে", verb: true },
+  { value: "েছ", verb: true },
+  { value: "ছিলাম", verb: true },
+  { value: "ছিলেন", verb: true },
+  { value: "ছিলে", verb: true },
+  { value: "ছিল", verb: true },
+  { value: "ছেন", verb: true },
+  { value: "ছিস", verb: true },
+  { value: "ছি", verb: true },
+  { value: "ছে", verb: true },
+  { value: "বেন", verb: true },
+  { value: "বে", verb: true },
+  { value: "বি", verb: true },
+  { value: "বো", verb: true },
+  { value: "লাম", verb: true },
+  { value: "লেন", verb: true },
+  { value: "লে", verb: true },
+  { value: "লি", verb: true },
+  { value: "ল", verb: true },
+  { value: "িস", verb: true },
+  { value: "েন", verb: true },
+  { value: "ুন", verb: true },
+  { value: "িয়া", verb: true },
+  { value: "িয়ে", verb: true },
+  { value: "ো", verb: true },
+  // Causative / verbal-noun derivation
+  { value: "ানো", verb: true },
+  { value: "আনো", verb: true }
 ];
+
+const SORTED_SUFFIXES = [...BENGALI_SUFFIXES].sort((a, b) => b.value.length - a.value.length);
+
+// A base consonant (incl. ড় ঢ় য়). Lemmatizing to root + "া" only makes sense
+// when the stem ends in a consonant, e.g. কর → করা, not করেছি → করেছিা.
+const ENDS_WITH_CONSONANT_RE = /[ক-হড়ঢ়য়ৎ]$/u;
+
+const MAX_STRIP_DEPTH = 2;
+const MAX_CANDIDATES = 8;
 
 export function containsBengali(text: string): boolean {
   return BENGALI_BLOCK_RE.test(text);
@@ -54,8 +131,6 @@ export class BengaliAdapter implements LanguageAdapter {
 
   analyzeMorphology(text: string): MorphologyAnalysis {
     const surface = this.normalize(text);
-    const candidates = new Map<string, MorphologyCandidate>();
-    const notes: string[] = [];
 
     if (surface.length === 0 || !this.detect(surface)) {
       return {
@@ -67,56 +142,93 @@ export class BengaliAdapter implements LanguageAdapter {
       };
     }
 
-    candidates.set(surface, {
-      confidence: 1,
-      normalized: surface,
-      reason: "exact"
-    });
+    const candidates = new Map<string, MorphologyCandidate>();
+    candidates.set(surface, { confidence: 1, normalized: surface, reason: "exact" });
+    const notes: string[] = [];
+    let topLevelAffixLength = 0;
 
-    for (const suffix of BENGALI_SUFFIXES) {
-      if (!surface.endsWith(suffix) || surface.length <= suffix.length + 1) {
-        continue;
+    const consider = (
+      stem: string,
+      confidence: number,
+      reason: MorphologyCandidate["reason"],
+      suffix?: string
+    ): boolean => {
+      const normalized = this.normalize(stem);
+      if (normalized.length < 2 || !this.detect(normalized)) {
+        return false;
       }
 
-      const stem = this.normalize(surface.slice(0, -suffix.length));
-      if (stem.length < 2 || !this.detect(stem)) {
-        continue;
+      const existing = candidates.get(normalized);
+      if (!existing || existing.confidence < confidence) {
+        candidates.set(normalized, { confidence: Number(confidence.toFixed(2)), normalized, reason, suffix });
       }
-
-      if (!candidates.has(stem)) {
-        candidates.set(stem, {
-          confidence: Math.max(0.35, 0.76 - suffix.length * 0.035),
-          normalized: stem,
-          reason: "suffix-strip",
-          suffix
-        });
-        notes.push(`Possible suffix "${suffix}" stripped to "${stem}".`);
-      }
-    }
-
-    if ((surface.endsWith("ায়") || surface.endsWith("ায়")) && surface.length > 3) {
-      const stem = this.normalize(surface.slice(0, -1));
-      if (!candidates.has(stem) && stem.length >= 2 && this.detect(stem)) {
-        candidates.set(stem, {
-          confidence: 0.7,
-          normalized: stem,
-          reason: "suffix-strip",
-          suffix: surface.endsWith("ায়") ? "য়" : "য়"
-        });
-        notes.push(`Possible locative suffix stripped to "${stem}".`);
-      }
-    }
-
-    const hasFallback = Array.from(candidates.values()).some((candidate) => candidate.reason !== "exact");
-    const score = hasFallback ? Math.min(0.92, 0.5 + Math.max(0, surface.length - 4) * 0.035) : 0.16;
-
-    return {
-      candidates: Array.from(candidates.values()).slice(0, 5),
-      complexity: hasFallback ? "inflected" : surface.length > 12 ? "compound" : "simple",
-      notes,
-      score: Number(score.toFixed(2)),
-      surface
+      return true;
     };
+
+    // Multi-pass suffix stripping, longest suffix first, up to MAX_STRIP_DEPTH layers.
+    let frontier: Array<{ confidence: number; depth: number; form: string }> = [
+      { confidence: 1, depth: 0, form: surface }
+    ];
+
+    while (frontier.length > 0) {
+      const next: typeof frontier = [];
+
+      for (const node of frontier) {
+        if (node.depth >= MAX_STRIP_DEPTH) {
+          continue;
+        }
+
+        for (const suffix of SORTED_SUFFIXES) {
+          if (!node.form.endsWith(suffix.value) || node.form.length <= suffix.value.length + 1) {
+            continue;
+          }
+
+          const stem = this.normalize(node.form.slice(0, -suffix.value.length));
+          if (stem.length < 2 || !this.detect(stem)) {
+            continue;
+          }
+
+          const decay = Math.max(0.4, 0.82 - suffix.value.length * 0.04);
+          const confidence = node.confidence * decay;
+
+          if (consider(stem, confidence, "suffix-strip", suffix.value)) {
+            if (node.depth === 0) {
+              topLevelAffixLength = Math.max(topLevelAffixLength, suffix.value.length);
+            }
+            if (notes.length < 6) {
+              notes.push(`Stripped "${suffix.value}" → "${stem}".`);
+            }
+            // Verb stems: also offer the dictionary/infinitive form (root + "া").
+            if (suffix.verb && ENDS_WITH_CONSONANT_RE.test(stem)) {
+              consider(`${stem}া`, confidence * 0.95, "lemma", suffix.value);
+            }
+            next.push({ confidence, depth: node.depth + 1, form: stem });
+          }
+        }
+      }
+
+      frontier = next;
+    }
+
+    const ordered = Array.from(candidates.values())
+      .sort((a, b) => b.confidence - a.confidence)
+      .slice(0, MAX_CANDIDATES);
+    const hasFallback = ordered.some((candidate) => candidate.reason !== "exact");
+
+    // Morphological-complexity score: share of the surface that is inflectional
+    // affix, plus a small bonus for how many distinct analyses are plausible.
+    const affixRatio = Math.min(1, topLevelAffixLength / surface.length);
+    const ambiguity = Math.min(1, (ordered.length - 1) / 5);
+    const score = hasFallback
+      ? Number(Math.min(0.98, 0.4 + affixRatio * 0.45 + ambiguity * 0.2).toFixed(2))
+      : surface.length > 12
+        ? 0.3
+        : 0.14;
+
+    const complexity: MorphologyAnalysis["complexity"] =
+      surface.length > 12 ? "compound" : hasFallback ? "inflected" : "simple";
+
+    return { candidates: ordered, complexity, notes, score, surface };
   }
 
   detect(text: string): boolean {

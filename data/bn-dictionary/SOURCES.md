@@ -54,11 +54,28 @@ The importer accepts:
 Every import upserts a row into `dictionary_sources` (key, title, homepage,
 license, license_url, attribution, entry_count, imported_at) for provenance.
 
+## bn→bn thesaurus (opt-in)
+
+A Bengali-headword → Bengali-synonym dataset
+([MinhasKamal/BengaliDictionary](https://github.com/MinhasKamal/BengaliDictionary)).
+It roughly doubles distinct headword coverage (~13k → ~20k) and adds Bengali
+synonyms. It is **GPL-3.0** (copyleft), so it is kept as a separate, opt-in
+source and is **not** part of `seed:all`:
+
+```bash
+pnpm --filter @bhashalens/api fetch:source bengali-thesaurus
+pnpm --filter @bhashalens/api import:dictionary ../../downloads/bn-thesaurus.json --source bengali-thesaurus
+```
+
+Each Bengali headword's `bn_syns` become its definition (joined with "; ") and
+its `synonyms`; entries with no Bengali synonym fall back to the English gloss.
+
 ## Licensing
 
 Wiktextract/Kaikki data derives from English Wiktionary and is **CC BY-SA 4.0**.
-Keep it under the `wiktextract` source key; do not merge it into the
-project-internal `seed` file, which has a different license posture.
+The thesaurus above is **GPL-3.0**. Keep each under its own source key; do not
+merge them into the project-internal `seed` file, which has a different license
+posture. Generated bulk files stay out of git and are reproduced via `fetch:source`.
 
 ## Next Data Milestones
 

@@ -49,6 +49,22 @@ describe("parseDictionaryRecord (Wiktextract)", () => {
     expect(parseDictionaryRecord({ word: "বাংলা", lang_code: "bn", senses: [{}] })).toEqual([]);
   });
 
+  it("parses bn→bn thesaurus records (bn + bn_syns)", () => {
+    const [entry] = parseDictionaryRecord(
+      { bn: "নদী", bn_syns: ["তটিনী", "স্রোতস্বিনী"], en: "river", pron: ["nodi", "nodi"] },
+      "bengali-thesaurus"
+    );
+    expect(entry.word).toBe("নদী");
+    expect(entry.definition).toBe("তটিনী; স্রোতস্বিনী");
+    expect(entry.synonyms).toEqual(["তটিনী", "স্রোতস্বিনী"]);
+    expect(entry.source).toBe("bengali-thesaurus");
+  });
+
+  it("falls back to the English gloss when a thesaurus record has no synonyms", () => {
+    const [entry] = parseDictionaryRecord({ bn: "জল", bn_syns: [], en: "water" }, "bengali-thesaurus");
+    expect(entry.definition).toBe("water");
+  });
+
   it("parses native BhashaLens JSON records", () => {
     const [entry] = parseDictionaryRecord(
       { word: "ভাষা", transliteration: "bhasha", partOfSpeech: "noun", definition: "Language." },

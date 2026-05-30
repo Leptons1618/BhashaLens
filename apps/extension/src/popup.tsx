@@ -30,7 +30,8 @@ const sourceOptions: Array<{ id: PanelId; label: string; description: string; lo
   { id: "dictionary", label: "Dictionary", description: "Curated + Wiktionary entries", locked: true },
   { id: "translate", label: "Translate", description: "Machine translation fallback" },
   { id: "wikipedia", label: "Wikipedia", description: "Article summary" },
-  { id: "web", label: "Web search", description: "DuckDuckGo + Google results" }
+  { id: "duckduckgo", label: "DuckDuckGo", description: "Inline web result snippets" },
+  { id: "google", label: "Google", description: "Best-effort results (often link-only)" }
 ];
 
 function EntryCard({ entry }: { entry: DictionaryEntry }) {
@@ -104,7 +105,7 @@ function Popup() {
       active.add(id);
     }
     active.add("dictionary");
-    const ordered = (["dictionary", "translate", "wikipedia", "web"] as PanelId[]).filter((panel) => active.has(panel));
+    const ordered = (["dictionary", "translate", "wikipedia", "duckduckgo", "google"] as PanelId[]).filter((panel) => active.has(panel));
     void patch({ panels: ordered });
   }
 

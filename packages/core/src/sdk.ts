@@ -234,7 +234,7 @@ export class BhashaLens {
       if (panel.id === "translate") {
         return Boolean(this.translationProvider);
       }
-      if (panel.id === "web") {
+      if (panel.id === "google" || panel.id === "duckduckgo") {
         return Boolean(this.searchProvider);
       }
       return true;
@@ -382,7 +382,18 @@ export class BhashaLens {
     return null;
   }
 
+  /** True when the event originated inside our own popup (e.g. a tab button). */
+  private isEventInPopup(event: Event): boolean {
+    const target = event.target;
+    return target instanceof Node && Boolean(this.popup.contains?.(target));
+  }
+
   private readonly handleClick = (event: MouseEvent): void => {
+    // Never treat clicks inside our popup (tab rail, links) as page lookups.
+    if (this.isEventInPopup(event)) {
+      return;
+    }
+
     if (this.activation === "selection") {
       return;
     }
@@ -414,8 +425,15 @@ export class BhashaLens {
     this.popup.hide();
   };
 
-  private readonly handlePointerUp = (): void => {
+  private readonly handlePointerUp = (event: PointerEvent): void => {
     if (this.activation === "click") {
+      return;
+    }
+
+    // A pointerup inside the popup (clicking a tab/link) must NOT re-run the
+    // selection lookup — doing so would reset the active panel and undo the
+    // user's tab switch.
+    if (this.isEventInPopup(event)) {
       return;
     }
 
@@ -587,8 +605,9 @@ export class BhashaLens {
       return;
     }
 
-    if (panel === "web" && !this.searchProvider) {
-      this.setPanelState(panel, { status: "ready", links: this.currentState.externalLinks ?? [] }, key);
+    const isSearch = panel === "google" || panel === "duckduckgo";
+    if (isSearch && !this.searchProvider) {
+      this.setPanelState(panel, { status: "empty" }, key);
       return;
     }
 
@@ -600,15 +619,12 @@ export class BhashaLens {
     this.setPanelState(panel, { status: "loading" }, key);
 
     try {
-      if (panel === "web") {
-        const response = await this.searchProvider!.search(context.normalized);
+      if (isSearch) {
+        const response = await this.searchProvider!.search(context.normalized, [panel]);
+        const items = response.groups.flatMap((group) => group.items);
         this.setPanelState(
           panel,
-          {
-            links: this.currentState.externalLinks ?? [],
-            searchGroups: response.groups,
-            status: response.groups.length > 0 ? "ready" : "empty"
-          },
+          { searchGroups: response.groups, status: items.length > 0 ? "ready" : "empty" },
           key
         );
         return;
