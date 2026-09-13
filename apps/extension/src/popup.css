@@ -519,3 +519,145 @@ button:disabled {
 .sourceRow small {
   color: #8a6244;
 }
+
+/* Quick test words */
+.quickWords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+button.quickWord {
+  background: rgba(39, 116, 93, 0.1);
+  border-radius: 999px;
+  color: #245f4d;
+  font-family: "Noto Sans Bengali", ui-sans-serif, system-ui, sans-serif;
+  font-size: 12px;
+  height: auto;
+  min-width: 0;
+  padding: 7px 11px;
+}
+
+button.quickWord:hover {
+  background: rgba(39, 116, 93, 0.2);
+}
+
+@media (prefers-color-scheme: dark) {
+  .popup {
+    background: linear-gradient(180deg, #1d2328 0%, #191e22 100%);
+    color: #eef2f0;
+  }
+
+  .eyebrow,
+  .rowToggle small,
+  .note,
+  .hint,
+  .result p,
+  .sourceRow small {
+    color: #9fb0a8;
+  }
+
+  h1,
+  .rowToggle span,
+  .entryHead strong,
+  .sourceRow strong {
+    color: #eef2f0;
+  }
+
+  label {
+    color: #b9c6bf;
+  }
+
+  .fieldHead span {
+    color: #5fcf9d;
+  }
+
+  .section,
+  .block,
+  .tabs {
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+
+  .segmented,
+  .tabs {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .segmented button,
+  .tabs button {
+    color: #b9c6bf;
+  }
+
+  .segmented button.active,
+  .tabs button.active {
+    background: #2a3238;
+    box-shadow: none;
+    color: #eef2f0;
+  }
+
+  input {
+    background: #222a30;
+    border-color: rgba(255, 255, 255, 0.18);
+    color: #eef2f0;
+  }
+
+  button {
+    background: #3fae86;
+    color: #07120d;
+  }
+
+  .entry,
+  .sourceRow {
+    background: #222a30;
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+
+  .def {
+    color: #dbe4df !important;
+  }
+
+  .examples li {
+    color: #b9c6bf;
+  }
+
+  .chip {
+    background: rgba(63, 174, 134, 0.16);
+    color: #8fe0c2;
+  }
+
+  .chip.pos {
+    background: rgba(255, 255, 255, 0.08);
+    color: #b9c6bf;
+  }
+
+  .chip.ipa {
+    background: rgba(255, 255, 255, 0.08);
+    color: #cbd5d0;
+  }
+
+  button.quickWord {
+    background: rgba(63, 174, 134, 0.16);
+    color: #8fe0c2;
+  }
+
+  button.quickWord:hover {
+    background: rgba(63, 174, 134, 0.28);
+  }
+
+  .switch span {
+    background: #4a5a53;
+  }
+
+  .switch input:checked + span {
+    background: #3fae86;
+  }
+
+  .switch span::after {
+    background: #eef2f0;
+  }
+
+  .swatch {
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+}

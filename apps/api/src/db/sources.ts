@@ -61,6 +61,19 @@ export const SOURCE_REGISTRY: Record<string, DictionarySource> = {
     description:
       "Bengali-headword → Bengali-synonym data (a bn→bn thesaurus) with romanization. Copyleft (GPL-3.0): kept as a separate, opt-in source — not bundled into `seed:all`."
   },
+  bnwiki: {
+    key: "bnwiki",
+    title: "Bengali Wikipedia word frequencies",
+    format: "tsv",
+    downloadUrl: "https://dumps.wikimedia.org/bnwiki/latest/bnwiki-latest-pages-articles.xml.bz2",
+    localPath: "downloads/bn-frequencies.tsv",
+    homepage: "https://dumps.wikimedia.org/bnwiki/latest/",
+    license: "CC BY-SA 4.0",
+    licenseUrl: "https://creativecommons.org/licenses/by-sa/4.0/",
+    attribution: "Word frequencies derived from the Bengali Wikipedia dump (Wikimedia Foundation, CC BY-SA 4.0).",
+    description:
+      "Ranked Bengali word forms built by scripts/build-frequencies.py. Used to rank entries and morphological candidates; the generated TSV stays out of git."
+  },
   seed: {
     key: "seed",
     title: "BhashaLens curated seed",

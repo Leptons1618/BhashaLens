@@ -23,6 +23,14 @@ interface FetchOptions {
   key: string;
 }
 
+/**
+ * Some hosts (notably kaikki.org) hang or drop requests with bare custom
+ * User-Agents, so the downloader presents a browser-compatible one with a
+ * project token appended. Keep the token: it is our attribution.
+ */
+const USER_AGENT =
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36 BhashaLens/0.1";
+
 interface SourceManifest {
   key: string;
   title: string;
@@ -77,7 +85,7 @@ async function download(source: DictionarySource, force: boolean): Promise<Sourc
 
   console.log(`Downloading ${source.title}\n  from ${source.downloadUrl}\n  to   ${source.localPath}`);
 
-  const response = await fetch(source.downloadUrl, { headers: { "user-agent": "BhashaLens/0.1 (+data pipeline)" } });
+  const response = await fetch(source.downloadUrl, { headers: { "user-agent": USER_AGENT } });
   if (!response.ok || !response.body) {
     throw new Error(`Download failed with HTTP ${response.status} ${response.statusText}`);
   }

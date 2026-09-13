@@ -71,6 +71,41 @@ export function ensureSchema(sqlite: Database.Database): void {
 
     CREATE UNIQUE INDEX IF NOT EXISTS translation_cache_unique_idx
       ON translation_cache(lang, normalized, target_lang);
+
+    CREATE TABLE IF NOT EXISTS word_frequencies (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      lang TEXT NOT NULL,
+      word TEXT NOT NULL,
+      normalized TEXT NOT NULL,
+      count INTEGER NOT NULL,
+      rank INTEGER NOT NULL,
+      source TEXT NOT NULL,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS word_frequencies_unique_idx
+      ON word_frequencies(lang, normalized);
+
+    CREATE INDEX IF NOT EXISTS word_frequencies_rank_idx
+      ON word_frequencies(lang, rank);
+
+    CREATE TABLE IF NOT EXISTS word_forms (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      lang TEXT NOT NULL,
+      form TEXT NOT NULL,
+      normalized TEXT NOT NULL,
+      lemma TEXT NOT NULL,
+      lemma_word TEXT NOT NULL,
+      tags TEXT,
+      source TEXT NOT NULL,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+
+    CREATE INDEX IF NOT EXISTS word_forms_lookup_idx
+      ON word_forms(lang, normalized);
+
+    CREATE UNIQUE INDEX IF NOT EXISTS word_forms_unique_idx
+      ON word_forms(lang, normalized, lemma);
   `);
 
   // Idempotent migration for databases created before the ipa column existed.

@@ -6,18 +6,25 @@ import {
   type MorphologyCandidate
 } from "@bhashalens/core";
 import cors from "@fastify/cors";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import Fastify, { type FastifyInstance } from "fastify";
 import { performance } from "node:perf_hooks";
 import { registerAdminRoutes } from "./admin.js";
 import { closeDbContext, createDbContext, type DbContext } from "./db/client.js";
-import { dictionaryEntries, translationCache, type DictionaryEntryRow } from "./db/schema.js";
+import { dictionaryEntries, translationCache, wordForms, wordFrequencies, type DictionaryEntryRow } from "./db/schema.js";
 import { createGoogleTranslator, type TranslateFn } from "./translate.js";
 import { duckDuckGoSearch, googleSearch, type SearchFn, type SearchItem } from "./search.js";
+import { suggestWords } from "./suggest.js";
 
 interface LookupQuerystring {
   lang?: string;
   word?: string;
+}
+
+interface SuggestQuerystring {
+  lang?: string;
+  limit?: string;
+  q?: string;
 }
 
 interface TranslateQuerystring {
@@ -38,6 +45,8 @@ export interface CreateServerOptions {
   logger?: boolean;
   /** Inject a translator (tests pass a stub); defaults to the Google gtx endpoint. */
   translate?: TranslateFn;
+  /** Label stored/served for machine translations (default "google-translate"). */
+  translateProviderName?: string;
   /** Inject web-search engines (tests pass stubs). */
   search?: Partial<Record<"duckduckgo" | "google", SearchFn>>;
   /** If set, /admin routes require this token via the x-admin-token header. */
@@ -45,6 +54,8 @@ export interface CreateServerOptions {
 }
 
 const SEARCH_LABELS: Record<string, string> = { duckduckgo: "DuckDuckGo", google: "Google" };
+const SEARCH_TTL_MS = 30 * 60 * 1000;
+const MAX_SEARCH_CACHE_ENTRIES = 200;
 
 function buildAdapterRegistry(adapters: LanguageAdapter[]): Map<LanguageCode, LanguageAdapter> {
   return new Map(adapters.map((adapter) => [adapter.lang, adapter]));
@@ -89,11 +100,38 @@ function readText(value: string | undefined): string | null {
 
 function lookupRows(dbContext: DbContext, lang: LanguageCode, normalized: string) {
   return dbContext.db
-    .select()
+    .select({ entry: dictionaryEntries, frequency: wordFrequencies.count })
     .from(dictionaryEntries)
+    .leftJoin(
+      wordFrequencies,
+      and(eq(wordFrequencies.lang, dictionaryEntries.lang), eq(wordFrequencies.normalized, dictionaryEntries.normalized))
+    )
     .where(and(eq(dictionaryEntries.lang, lang), eq(dictionaryEntries.normalized, normalized)))
+    .orderBy(desc(sql`coalesce(${wordFrequencies.count}, 0)`))
     .limit(10)
     .all();
+}
+
+/** Wiktionary-mined form → lemma mappings for the exact surface (e.g. গেলাম → যাওয়া). */
+function lookupFormLemmas(dbContext: DbContext, lang: LanguageCode, normalized: string) {
+  return dbContext.db
+    .select()
+    .from(wordForms)
+    .where(and(eq(wordForms.lang, lang), eq(wordForms.normalized, normalized)))
+    .limit(3)
+    .all();
+}
+
+/**
+ * Candidate precedence: an exact dictionary hit beats a Wiktionary form
+ * mapping, which beats rule-derived morphology. Frequency only breaks ties
+ * within the same rank.
+ */
+function candidatePriority(reason: MorphologyCandidate["reason"]): number {
+  if (reason === "exact") {
+    return 3;
+  }
+  return reason === "form" ? 2 : 1;
 }
 
 export async function createServer(options: CreateServerOptions = {}): Promise<FastifyInstance> {
@@ -101,12 +139,31 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
   const dbContext = options.dbContext ?? createDbContext();
   const adapters = buildAdapterRegistry(options.adapters ?? [new BengaliAdapter()]);
   const translate = options.translate ?? createGoogleTranslator();
+  const translateProviderName = options.translateProviderName ?? "google-translate";
   const searchEngines: Record<"duckduckgo" | "google", SearchFn> = {
     duckduckgo: options.search?.duckduckgo ?? duckDuckGoSearch,
     google: options.search?.google ?? googleSearch
   };
   const searchCache = new Map<string, { expiresAt: number; items: SearchItem[] }>();
-  const SEARCH_TTL_MS = 30 * 60 * 1000;
+  const cacheSearchResults = (key: string, items: SearchItem[]): void => {
+    const now = Date.now();
+    if (searchCache.size >= MAX_SEARCH_CACHE_ENTRIES) {
+      // Evict expired entries first, then the oldest insertion, so the cache
+      // cannot grow unbounded across a long-running API process.
+      for (const [existingKey, record] of searchCache) {
+        if (record.expiresAt <= now) {
+          searchCache.delete(existingKey);
+        }
+      }
+      if (searchCache.size >= MAX_SEARCH_CACHE_ENTRIES) {
+        const oldestKey = searchCache.keys().next().value;
+        if (oldestKey !== undefined) {
+          searchCache.delete(oldestKey);
+        }
+      }
+    }
+    searchCache.set(key, { expiresAt: now + SEARCH_TTL_MS, items });
+  };
   const app = Fastify({ logger: options.logger ?? true });
 
   await app.register(cors, {
@@ -147,11 +204,33 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
             reason: "exact" as const
           }
         ];
+    const formCandidates: MorphologyCandidate[] = adapter.detect(normalized)
+      ? lookupFormLemmas(dbContext, lang, normalized).map((match) => ({
+          confidence: 0.99,
+          normalized: match.lemma,
+          reason: "form" as const,
+          suffix: match.tags?.length ? match.tags.join(" + ") : undefined
+        }))
+      : [];
+
+    // Search order = exact, then Wiktionary form mappings, then morphology.
+    const searchOrder: MorphologyCandidate[] = [];
+    const queued = new Set<string>();
+    const enqueue = (candidate: MorphologyCandidate): void => {
+      if (!queued.has(candidate.normalized)) {
+        queued.add(candidate.normalized);
+        searchOrder.push(candidate);
+      }
+    };
+    candidates.filter((candidate) => candidate.reason === "exact").forEach(enqueue);
+    formCandidates.forEach(enqueue);
+    candidates.filter((candidate) => candidate.reason !== "exact").forEach(enqueue);
+
     const emptyResponse = {
       entries: [],
       found: false,
       lookupWord: normalized,
-      matchedCandidate: candidates[0],
+      matchedCandidate: searchOrder[0] ?? candidates[0],
       morphology,
       query: {
         lang,
@@ -168,17 +247,32 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
     }
 
     let matchedCandidate: MorphologyCandidate | undefined;
-    let rows: ReturnType<typeof lookupRows> = [];
+    let matchedRows: ReturnType<typeof lookupRows> = [];
+    let matchedFrequency = -1;
+    let matchedPriority = -1;
 
-    for (const candidate of candidates) {
-      rows = lookupRows(dbContext, lang, candidate.normalized);
-      if (rows.length > 0) {
+    for (const candidate of searchOrder) {
+      const candidateRows = lookupRows(dbContext, lang, candidate.normalized);
+      if (candidateRows.length === 0) {
+        continue;
+      }
+
+      const priority = candidatePriority(candidate.reason);
+      const frequency = candidateRows[0]?.frequency ?? 0;
+      if (priority > matchedPriority || (priority === matchedPriority && frequency > matchedFrequency)) {
         matchedCandidate = candidate;
+        matchedRows = candidateRows;
+        matchedFrequency = frequency;
+        matchedPriority = priority;
+      }
+
+      if (priority === 3) {
         break;
       }
     }
 
-    const entries = rows.map(mapRow);
+    const entries = matchedRows.map((row) => mapRow(row.entry));
+    const suggestions = entries.length === 0 ? suggestWords(dbContext, { lang, limit: 5, query: normalized }) : undefined;
 
     reply.header("cache-control", "public, max-age=300");
     return {
@@ -186,13 +280,32 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
       found: entries.length > 0,
       latencyMs: Math.round(performance.now() - started),
       lookupWord: matchedCandidate?.normalized ?? normalized,
-      matchedCandidate: matchedCandidate ?? candidates[0],
+      matchedCandidate: matchedCandidate ?? searchOrder[0] ?? candidates[0],
       morphology,
       query: {
         lang,
         normalized,
         word
-      }
+      },
+      suggestions
+    };
+  });
+
+  app.get<{ Querystring: SuggestQuerystring }>("/suggest", async (request, reply) => {
+    const query = readText(request.query.q);
+    const lang = (readText(request.query.lang) ?? "bn") as LanguageCode;
+    const limit = Math.min(Math.max(Number.parseInt(readText(request.query.limit) ?? "5", 10) || 5, 1), 10);
+
+    if (!query) {
+      return reply.code(400).send({ error: "Missing required query parameter: q" });
+    }
+
+    const suggestions = suggestWords(dbContext, { lang, limit, query });
+    reply.header("cache-control", "public, max-age=300");
+    return {
+      normalized: query.normalize("NFC").trim(),
+      query,
+      suggestions
     };
   });
 
@@ -244,7 +357,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
       return {
         cached: false,
         found: false,
-        provider: "google-translate",
+        provider: translateProviderName,
         query: { word, from, to },
         translation: null,
         latencyMs: Math.round(performance.now() - started)
@@ -253,14 +366,14 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
 
     dbContext.db
       .insert(translationCache)
-      .values({ lang: from, normalized, targetLang: to, word, translation, provider: "google-translate" })
+      .values({ lang: from, normalized, targetLang: to, word, translation, provider: translateProviderName })
       .onConflictDoNothing()
       .run();
 
     return {
       cached: false,
       found: true,
-      provider: "google-translate",
+      provider: translateProviderName,
       query: { word, from, to },
       translation,
       latencyMs: Math.round(performance.now() - started)
@@ -297,7 +410,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
         }
 
         if (items.length > 0) {
-          searchCache.set(cacheKey, { expiresAt: now + SEARCH_TTL_MS, items });
+          cacheSearchResults(cacheKey, items);
         }
         return { engine, items, label: SEARCH_LABELS[engine] ?? engine };
       })

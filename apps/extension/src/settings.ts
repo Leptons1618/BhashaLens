@@ -13,7 +13,7 @@ export interface BhashaLensSettings {
 }
 
 export const ALL_PANELS: PanelId[] = ["dictionary", "translate", "wikipedia", "duckduckgo", "google"];
-export const THEMES: PopupTheme[] = ["parchment", "green", "dark", "light"];
+export const THEMES: PopupTheme[] = ["system", "parchment", "green", "dark", "light"];
 export const SIZES: PopupSize[] = ["small", "medium", "large"];
 
 export const DEFAULT_SETTINGS: BhashaLensSettings = {
@@ -23,7 +23,7 @@ export const DEFAULT_SETTINGS: BhashaLensSettings = {
   enabled: true,
   panels: ["dictionary", "translate", "wikipedia", "duckduckgo", "google"],
   size: "medium",
-  theme: "parchment",
+  theme: "system",
   translateTo: "en",
   wikipediaLang: "bn"
 };

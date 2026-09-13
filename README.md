@@ -12,6 +12,7 @@ apps/extension      Plasmo extension with React popup UI and content script
 packages/core       Framework-agnostic SDK and language/provider abstractions
 packages/react      React hooks over the core SDK
 data/bn-dictionary  Seed Bengali dictionary data
+docs/research       Bengali NLP papers, notes, and data-source survey
 ```
 
 ## Quick Start
@@ -29,6 +30,19 @@ imports the full dataset on top — growing the dictionary to **~15k entries**
 with transliteration, IPA, usage examples, and synonyms. It is idempotent, so
 re-run it any time. Each import is recorded in a `dictionary_sources` table with
 its license (CC BY-SA 4.0). See [data/bn-dictionary/SOURCES.md](data/bn-dictionary/SOURCES.md).
+
+### Frequency ranking (optional)
+
+```bash
+pnpm freq:all          # build + import Bengali word frequencies
+```
+
+`pnpm freq:all` streams the Bengali Wikipedia dump (~541 MB, CC BY-SA 4.0),
+counts word forms, and imports the ranked list into `word_frequencies`. Lookups
+then prefer the most common morphological candidate when several match (e.g.
+`মানুষটিকে` resolves to `মানুষ`, not `মানুষটি`). The generated TSV stays out of
+git. The morphology rules behind candidate generation are documented in
+[docs/research/bengali-nlp-notes.md](docs/research/bengali-nlp-notes.md).
 
 The API defaults to `http://localhost:8787`. Then build/load the extension for
 your browser (below) and select Bengali text on any website. The toolbar popup
@@ -74,8 +88,20 @@ For live-reload during development use `pnpm --filter @bhashalens/extension dev`
 - On **Select** trigger, suppresses the browser's native context menu so the bubble
   is the immediate, top-priority response (Alt+right-click bypasses).
 - Highlights the active word with an inline underline overlay.
+- Copies the word and pronounces it (`speechSynthesis`, when a `bn` voice is
+  available) from the bubble header.
+- Expands beyond the first three senses with one click.
+- Follows the OS colour scheme by default (`system` theme) and shows the entry
+  source (e.g. `wiktextract`) next to each definition.
 - Caches lookup results in the content script for responsive repeat lookups.
-- Uses conservative Bengali suffix stripping to try root-form fallback lookups.
+- Uses marker-sequence Bengali morphology (plural → determiner → case → emphasis,
+  plus verb endings), verified against the dictionary, then ranked by word
+  frequency when available. Rules come from
+  [docs/research/bengali-nlp-notes.md](docs/research/bengali-nlp-notes.md).
+- Resolves irregular inflections through a Wiktionary-mined form table
+  (`গেলাম → যাওয়া`, `খেয়েছি → খাওয়া`) before falling back to rules.
+- Offers clickable **"Did you mean"** suggestions when nothing matches
+  (`বাংলদেশ → বাংলাদেশ`), using the frequency list plus bounded edit distance.
 - Keeps language adapters, dictionary, translation, and search providers pluggable.
 
 ### Configuring the bubble
@@ -83,10 +109,11 @@ For live-reload during development use `pnpm --filter @bhashalens/extension dev`
 Click the toolbar icon for a tabbed settings panel:
 
 - **General** — enable/disable, trigger (Select / Click / Both), "bubble first on
-  select", theme (Parchment / Green / Dark / Light), and bubble size (S / M / L).
+  select", theme (Auto / Parchment / Green / Dark / Light), and bubble size (S / M / L).
 - **Sources** — the lookup API URL + connection status, which tabs/data sources the
   bubble shows (Dictionary is always on), Wikipedia language, and translate target.
-- **Test** — try a lookup against the API without leaving the popup.
+- **Test** — try a lookup against the API without leaving the popup, with one-click
+  example words.
 
 Changes save instantly and open tabs pick them up without reloading.
 
@@ -154,6 +181,27 @@ GET /search?q=সতর্কীকরণ&engines=duckduckgo,google
   "groups": [
     { "engine": "duckduckgo", "label": "DuckDuckGo", "items": [{ "title": "…", "snippet": "…", "url": "…" }] },
     { "engine": "google", "label": "Google", "items": [] }
+  ]
+}
+```
+
+### Suggestions
+
+Backs the bubble's "Did you mean" row and is also usable directly. Candidates
+come from `word_frequencies`, ranked by bounded edit distance, dictionary
+coverage, then frequency. `/lookup` includes `suggestions` automatically when it
+finds nothing.
+
+```http
+GET /suggest?q=বাংলদেশ&lang=bn&limit=5
+```
+
+```json
+{
+  "query": "বাংলদেশ",
+  "normalized": "বাংলদেশ",
+  "suggestions": [
+    { "word": "বাংলাদেশ", "normalized": "বাংলাদেশ", "distance": 1, "inDictionary": true, "frequency": 99565, "prefix": false }
   ]
 }
 ```

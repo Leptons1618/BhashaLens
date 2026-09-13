@@ -48,7 +48,9 @@ The importer accepts:
   - phonemic IPA from `sounds[]` (prefers `/…/` over `[..]`),
   - up to three usage examples per sense as `Bengali — English`,
   - synonyms from sense- and entry-level `synonyms[]`,
-  - reader-friendly POS labels (`adj` → `adjective`, `name` → `proper noun`, …).
+  - reader-friendly POS labels (`adj` → `adjective`, `name` → `proper noun`, …),
+  - inflected forms from `forms[]` into the `word_forms` table (form → lemma +
+    grammatical tags), which is how irregular verbs lemmatize.
 - TSV exports with `word`, `definition`, `transliteration`, `partOfSpeech`, `synonyms`, and `source` columns.
 
 Every import upserts a row into `dictionary_sources` (key, title, homepage,
@@ -70,17 +72,35 @@ pnpm --filter @bhashalens/api import:dictionary ../../downloads/bn-thesaurus.jso
 Each Bengali headword's `bn_syns` become its definition (joined with "; ") and
 its `synonyms`; entries with no Bengali synonym fall back to the English gloss.
 
+## Frequency list (opt-in)
+
+Word frequencies rank entries and morphological candidates. They are derived
+from the Bengali Wikipedia dump (CC BY-SA 4.0) and kept in a separate
+`word_frequencies` table — they are not dictionary data:
+
+```bash
+pnpm freq:all   # streams the bnwiki dump, builds downloads/bn-frequencies.tsv, imports it
+```
+
+The builder is `apps/api/scripts/build-frequencies.py` (Python stdlib only) and
+the importer is `apps/api/src/db/import-frequencies.ts`. The generated TSV stays
+out of git; the derived list keeps Wikimedia attribution.
+
 ## Licensing
 
 Wiktextract/Kaikki data derives from English Wiktionary and is **CC BY-SA 4.0**.
-The thesaurus above is **GPL-3.0**. Keep each under its own source key; do not
-merge them into the project-internal `seed` file, which has a different license
-posture. Generated bulk files stay out of git and are reproduced via `fetch:source`.
+The thesaurus above is **GPL-3.0**. The frequency list derives from **Bengali
+Wikipedia (CC BY-SA 4.0)**. Keep each under its own source key; do not merge
+them into the project-internal `seed` file, which has a different license
+posture. Generated bulk files stay out of git and are reproduced via
+`fetch:source` / `freq:all`.
 
 ## Next Data Milestones
 
 1. ~~Import a Wiktionary-derived JSONL snapshot into SQLite.~~ ✅
 2. ~~Add a `dictionary_sources` table for license/provenance metadata.~~ ✅
-3. Add a `word_frequencies` table so common Bengali forms rank first.
+3. ~~Add a `word_frequencies` table so common Bengali forms rank first.~~ ✅
 4. Add a review queue for entries without definitions or with low-confidence glosses.
 5. ~~Keep generated bulk files outside git and reproduce them with importer commands.~~ ✅ (`fetch:source`)
+6. Mine verb root→lemma pairs from Kaikki `forms[]` so irregular verbs
+   (`গেলাম → যাওয়া`) lemmatize without a POS tagger.

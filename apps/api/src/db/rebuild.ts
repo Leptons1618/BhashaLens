@@ -38,7 +38,7 @@ async function rebuild(): Promise<void> {
   console.log(`• Seeded ${seeded.count} curated entries (source: seed).`);
 
   const imported = await importDictionaryFile({ filePath, source: "wiktextract" });
-  console.log(`• Imported ${imported.inserted} Wiktextract entries (${imported.parsed} parsed).`);
+  console.log(`• Imported ${imported.inserted} Wiktextract entries (${imported.parsed} parsed, ${imported.forms} inflected forms).`);
 
   console.log(`\n✓ Dictionary ready: ${seeded.count + imported.inserted} entries total. Start the API with: pnpm --filter @bhashalens/api dev`);
 }

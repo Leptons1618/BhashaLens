@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createDbContext } from "./db/client.js";
-import { dictionaryEntries } from "./db/schema.js";
+import { dictionaryEntries, wordForms, wordFrequencies } from "./db/schema.js";
 import { createServer } from "./server.js";
 
 describe("lookup API", () => {
@@ -59,6 +59,122 @@ describe("lookup API", () => {
     expect(body.found).toBe(true);
     expect(body.lookupWord).toBe("বাংলা");
     expect(body.matchedCandidate.reason).toBe("suffix-strip");
+
+    await app.close();
+  });
+
+  it("prefers the more frequent stem when several candidates have entries", async () => {
+    const dbContext = createDbContext(":memory:");
+    dbContext.db
+      .insert(dictionaryEntries)
+      .values([
+        {
+          definition: "Human being.",
+          lang: "bn",
+          normalized: "মানুষ",
+          partOfSpeech: "noun",
+          source: "test",
+          transliteration: "manush",
+          word: "মানুষ"
+        },
+        {
+          definition: "The person.",
+          lang: "bn",
+          normalized: "মানুষটি",
+          partOfSpeech: "noun",
+          source: "test",
+          transliteration: "manushti",
+          word: "মানুষটি"
+        }
+      ])
+      .run();
+    dbContext.db
+      .insert(wordFrequencies)
+      .values([
+        { lang: "bn", word: "মানুষ", normalized: "মানুষ", count: 1000, rank: 1, source: "bnwiki" },
+        { lang: "bn", word: "মানুষটি", normalized: "মানুষটি", count: 5, rank: 2, source: "bnwiki" }
+      ])
+      .run();
+
+    const app = await createServer({ dbContext, logger: false });
+    const body = (
+      await app.inject({ method: "GET", url: `/lookup?word=${encodeURIComponent("মানুষটিকে")}&lang=bn` })
+    ).json();
+
+    expect(body.found).toBe(true);
+    expect(body.lookupWord).toBe("মানুষ");
+
+    await app.close();
+  });
+
+  it("resolves irregular verb forms through the Wiktionary form table", async () => {
+    const dbContext = createDbContext(":memory:");
+    dbContext.db
+      .insert(dictionaryEntries)
+      .values({
+        definition: "To go.",
+        lang: "bn",
+        normalized: "যাওয়া",
+        partOfSpeech: "verb",
+        source: "test",
+        transliteration: "jaoya",
+        word: "যাওয়া"
+      })
+      .run();
+    dbContext.db
+      .insert(wordForms)
+      .values({
+        form: "গেলাম",
+        lang: "bn",
+        lemma: "যাওয়া",
+        lemmaWord: "যাওয়া",
+        normalized: "গেলাম",
+        source: "test",
+        tags: ["first-person", "past"]
+      })
+      .run();
+
+    const app = await createServer({ dbContext, logger: false });
+    const body = (
+      await app.inject({ method: "GET", url: `/lookup?word=${encodeURIComponent("গেলাম")}&lang=bn` })
+    ).json();
+
+    expect(body.found).toBe(true);
+    expect(body.lookupWord).toBe("যাওয়া");
+    expect(body.matchedCandidate.reason).toBe("form");
+    expect(body.matchedCandidate.suffix).toBe("first-person + past");
+
+    await app.close();
+  });
+
+  it("suggests close words when a lookup finds nothing", async () => {
+    const dbContext = createDbContext(":memory:");
+    dbContext.db
+      .insert(dictionaryEntries)
+      .values({
+        definition: "Warning.",
+        lang: "bn",
+        normalized: "সতর্কীকরণ",
+        partOfSpeech: "noun",
+        source: "test",
+        transliteration: "satarkikoron",
+        word: "সতর্কীকরণ"
+      })
+      .run();
+    dbContext.db
+      .insert(wordFrequencies)
+      .values({ count: 500, lang: "bn", normalized: "সতর্কীকরণ", rank: 1, source: "test", word: "সতর্কীকরণ" })
+      .run();
+
+    const app = await createServer({ dbContext, logger: false });
+    const misspelled = encodeURIComponent("সতর্কিকরণ");
+    const lookup = (await app.inject({ method: "GET", url: `/lookup?word=${misspelled}&lang=bn` })).json();
+    expect(lookup.found).toBe(false);
+    expect(lookup.suggestions.map((item: { word: string }) => item.word)).toContain("সতর্কীকরণ");
+
+    const direct = (await app.inject({ method: "GET", url: `/suggest?q=${misspelled}&lang=bn&limit=3` })).json();
+    expect(direct.suggestions[0].word).toBe("সতর্কীকরণ");
+    expect(direct.suggestions[0].inDictionary).toBe(true);
 
     await app.close();
   });

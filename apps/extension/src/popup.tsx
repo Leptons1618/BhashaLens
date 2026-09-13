@@ -20,6 +20,7 @@ const sizeOptions: Array<{ label: string; value: PopupSize }> = [
 ];
 
 const themeOptions: Array<{ label: string; value: PopupTheme; swatch: string; ink: string }> = [
+  { label: "Auto (follows system)", value: "system", swatch: "linear-gradient(135deg, #fffaf0 50%, #20262b 50%)", ink: "#27745d" },
   { label: "Parchment", value: "parchment", swatch: "#fffaf0", ink: "#27745d" },
   { label: "Green", value: "green", swatch: "#e2efe6", ink: "#1f7a55" },
   { label: "Dark", value: "dark", swatch: "#20262b", ink: "#3fae86" },
@@ -253,6 +254,22 @@ function Popup() {
               <div className="row">
                 <input id="test-word" lang="bn" value={testWord} placeholder="বাংলা শব্দ লিখুন" onChange={(e) => setTestWord(e.currentTarget.value)} />
                 <button disabled={status === "loading"} type="submit">{status === "loading" ? "…" : "Lookup"}</button>
+              </div>
+              <div className="quickWords" aria-label="Example words">
+                {["ভালোবাসা", "নদী", "বই", "মানুষটিকে"].map((word) => (
+                  <button
+                    key={word}
+                    className="quickWord"
+                    lang="bn"
+                    type="button"
+                    onClick={() => {
+                      setTestWord(word);
+                      void lookup(word);
+                    }}
+                  >
+                    {word}
+                  </button>
+                ))}
               </div>
             </form>
             <div className="result" aria-live="polite">

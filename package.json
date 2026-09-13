@@ -13,6 +13,7 @@
     "lint": "turbo lint",
     "seed": "pnpm --filter @bhashalens/api seed",
     "seed:all": "pnpm --filter @bhashalens/api seed:all",
+    "freq:all": "pnpm --filter @bhashalens/api build:frequencies && pnpm --filter @bhashalens/api import:frequencies ../../downloads/bn-frequencies.tsv --source bnwiki",
     "ext:build": "pnpm --filter @bhashalens/extension build:all",
     "ext:package": "pnpm --filter @bhashalens/extension package:all",
     "test": "turbo test",

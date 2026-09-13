@@ -248,6 +248,65 @@ export function parseDictionaryRecord(raw: unknown, source = "import"): Dictiona
   return fromRecord(raw, source);
 }
 
+export interface WordForm {
+  form: string;
+  lemma: string;
+  lemmaWord: string;
+  normalized: string;
+  tags: string[];
+}
+
+/** Forms that are not inflections: romanization and table scaffolding. */
+const FORM_SKIP_TAGS = new Set(["romanization", "table-tags", "inflection-template"]);
+
+/**
+ * Mine Wiktionary `forms[]` into inflected form → lemma mappings. This covers
+ * what rules cannot derive — most usefully irregular verbs such as
+ * গেলাম → যাওয়া — and gives each form its grammatical tags for display.
+ * Regular inflection is still handled by the morphology rules in core.
+ */
+export function parseDictionaryForms(raw: unknown): WordForm[] {
+  if (!raw || typeof raw !== "object") {
+    return [];
+  }
+
+  const record = raw as WiktextractEntry;
+  if (record.lang_code !== "bn") {
+    return [];
+  }
+
+  const lemmaWord = readString(record.word);
+  if (!lemmaWord || !adapter.detect(lemmaWord)) {
+    return [];
+  }
+
+  const lemma = adapter.normalize(lemmaWord);
+  const seen = new Set<string>();
+  const forms: WordForm[] = [];
+
+  for (const form of record.forms ?? []) {
+    const value = readString(form.form);
+    const tags = form.tags ?? [];
+    if (!value || tags.some((tag) => FORM_SKIP_TAGS.has(tag)) || !adapter.detect(value)) {
+      continue;
+    }
+
+    const normalized = adapter.normalize(value);
+    if (normalized.length === 0 || normalized === lemma) {
+      continue;
+    }
+
+    const key = `${normalized}\u0000${lemma}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    forms.push({ form: value, lemma, lemmaWord, normalized, tags });
+  }
+
+  return forms;
+}
+
 /** Map a MinhasKamal/BengaliDictionary record to a bn→bn thesaurus entry. */
 function fromBengaliThesaurus(record: Record<string, unknown>, source: string): DictionaryEntry[] {
   const word = readString(record.bn);
@@ -310,51 +369,66 @@ function parseTsvLine(line: string): string[] {
   return line.split("\t").map((cell) => cell.trim());
 }
 
-async function loadJsonEntries(filePath: string, source: string): Promise<DictionaryEntry[]> {
-  const raw = (await readFile(filePath, "utf8")).replace(/^﻿/, "");
-  const parsed = JSON.parse(raw) as unknown;
-  if (!Array.isArray(parsed)) {
-    return fromRecord(parsed, source);
-  }
-
-  return parsed.flatMap((record) => fromRecord(record, source));
+interface LoadedEntries {
+  entries: DictionaryEntry[];
+  forms: WordForm[];
 }
 
-async function loadJsonlEntries(filePath: string, source: string, limit?: number): Promise<DictionaryEntry[]> {
+function loadRecords(raw: unknown, source: string): LoadedEntries {
+  const records = Array.isArray(raw) ? raw : [raw];
+  return {
+    entries: records.flatMap((record) => fromRecord(record, source)),
+    forms: records.flatMap((record) => parseDictionaryForms(record))
+  };
+}
+
+async function loadJsonEntries(filePath: string, source: string): Promise<LoadedEntries> {
+  const raw = (await readFile(filePath, "utf8")).replace(/^﻿/, "");
+  return loadRecords(JSON.parse(raw) as unknown, source);
+}
+
+async function loadJsonlEntries(filePath: string, source: string, limit?: number): Promise<LoadedEntries> {
   const stream = createReadStream(filePath, "utf8");
   const lines = createInterface({ crlfDelay: Number.POSITIVE_INFINITY, input: stream });
-  const entries: DictionaryEntry[] = [];
+  const result: LoadedEntries = { entries: [], forms: [] };
 
   for await (const line of lines) {
     if (line.trim().length === 0) {
       continue;
     }
 
-    entries.push(...fromRecord(JSON.parse(line), source));
+    const loaded = loadRecords(JSON.parse(line), source);
+    result.entries.push(...loaded.entries);
+    result.forms.push(...loaded.forms);
 
-    if (limit && entries.length >= limit) {
+    if (limit && result.entries.length >= limit) {
       break;
     }
   }
 
-  return limit ? entries.slice(0, limit) : entries;
+  if (limit) {
+    result.entries = result.entries.slice(0, limit);
+  }
+
+  return result;
 }
 
-async function loadTsvEntries(filePath: string, source: string): Promise<DictionaryEntry[]> {
+async function loadTsvEntries(filePath: string, source: string): Promise<LoadedEntries> {
   const lines = (await readFile(filePath, "utf8")).split(/\r?\n/u).filter((line) => line.trim().length > 0);
   if (lines.length < 2) {
-    return [];
+    return { entries: [], forms: [] };
   }
 
   const headers = parseTsvLine(lines[0]!);
-  return lines.slice(1).flatMap((line) => {
+  const entries = lines.slice(1).flatMap((line) => {
     const cells = parseTsvLine(line);
     const record = Object.fromEntries(headers.map((header, index) => [header, cells[index] ?? ""]));
     return fromRecord(record, source);
   });
+  return { entries, forms: [] };
 }
 
-async function loadEntries(options: ImportOptions): Promise<DictionaryEntry[]> {
+async function loadEntries(options: ImportOptions): Promise<LoadedEntries> {
   const source = options.source ?? "import";
   const format = detectFormat(options.filePath, options.format);
 
@@ -363,20 +437,22 @@ async function loadEntries(options: ImportOptions): Promise<DictionaryEntry[]> {
   }
 
   if (format === "tsv") {
-    const entries = await loadTsvEntries(options.filePath, source);
-    return options.limit ? entries.slice(0, options.limit) : entries;
+    const loaded = await loadTsvEntries(options.filePath, source);
+    return { entries: options.limit ? loaded.entries.slice(0, options.limit) : loaded.entries, forms: [] };
   }
 
-  const entries = await loadJsonEntries(options.filePath, source);
-  return options.limit ? entries.slice(0, options.limit) : entries;
+  const loaded = await loadJsonEntries(options.filePath, source);
+  return { entries: options.limit ? loaded.entries.slice(0, options.limit) : loaded.entries, forms: loaded.forms };
 }
 
-export async function importDictionaryFile(options: ImportOptions): Promise<{ inserted: number; parsed: number }> {
-  const entries = await loadEntries(options);
+export async function importDictionaryFile(options: ImportOptions): Promise<{ forms: number; inserted: number; parsed: number }> {
+  const { entries, forms } = await loadEntries(options);
   const context = createDbContext();
+  const source = options.source ?? "import";
 
   if (options.replace) {
     context.sqlite.prepare("DELETE FROM dictionary_entries WHERE lang = ?").run("bn");
+    context.sqlite.prepare("DELETE FROM word_forms WHERE lang = ?").run("bn");
   }
 
   const insert = context.sqlite.prepare(`
@@ -406,7 +482,12 @@ export async function importDictionaryFile(options: ImportOptions): Promise<{ in
     )
   `);
 
-  const writeMany = context.sqlite.transaction((rows: DictionaryEntry[]) => {
+  const insertForm = context.sqlite.prepare(`
+    INSERT OR IGNORE INTO word_forms (lang, form, normalized, lemma, lemma_word, tags, source)
+    VALUES (@lang, @form, @normalized, @lemma, @lemmaWord, @tags, @source)
+  `);
+
+  const writeMany = context.sqlite.transaction((rows: DictionaryEntry[], formRows: WordForm[]) => {
     let inserted = 0;
     for (const row of rows) {
       const result = insert.run({
@@ -418,13 +499,28 @@ export async function importDictionaryFile(options: ImportOptions): Promise<{ in
       });
       inserted += result.changes;
     }
-    return inserted;
+
+    let formsInserted = 0;
+    for (const form of formRows) {
+      const result = insertForm.run({
+        lang: "bn",
+        form: form.form,
+        lemma: form.lemma,
+        lemmaWord: form.lemmaWord,
+        normalized: form.normalized,
+        source,
+        tags: form.tags.length > 0 ? JSON.stringify(form.tags) : null
+      });
+      formsInserted += result.changes;
+    }
+
+    return { formsInserted, inserted };
   });
 
-  const inserted = writeMany(entries);
+  const { formsInserted, inserted } = writeMany(entries, forms);
   recordProvenance(context.sqlite, options.source, inserted);
   context.sqlite.close();
-  return { inserted, parsed: entries.length };
+  return { forms: formsInserted, inserted, parsed: entries.length };
 }
 
 /** Upsert provenance metadata so the app can attribute where definitions came from. */
@@ -460,5 +556,5 @@ function recordProvenance(sqlite: ReturnType<typeof createDbContext>["sqlite"], 
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const result = await importDictionaryFile(parseArgs(process.argv.slice(2)));
-  console.log(`Imported ${result.inserted} entries (${result.parsed} parsed).`);
+  console.log(`Imported ${result.inserted} entries (${result.parsed} parsed) and ${result.forms} inflected forms.`);
 }

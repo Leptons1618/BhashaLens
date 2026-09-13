@@ -46,4 +46,37 @@ describe("BengaliAdapter", () => {
     expect(first?.reason).toBe("exact");
     expect(first?.confidence).toBe(1);
   });
+
+  it("walks the noun marker slots right-to-left (BanLemma examples)", () => {
+    const cases: Array<[string, string]> = [
+      ["শিশুদেরটাতেও", "শিশু"], // plural + determiner + case + emphasis
+      ["বইগুলিতেই", "বই"], // plural + case + emphasis
+      ["গাছটাতেও", "গাছ"], // determiner + case + emphasis
+      ["শিক্ষককে", "শিক্ষক"], // case only
+      ["জনগণই", "জনগণ"], // emphasis only
+      ["মানুষের", "মানুষ"] // case ের
+    ];
+
+    for (const [word, lemma] of cases) {
+      const stems = adapter.analyzeMorphology(word).candidates.map((candidate) => candidate.normalized);
+      expect(stems, word).toContain(lemma);
+    }
+  });
+
+  it("records the stripped marker sequence on the matched candidate", () => {
+    const candidate = adapter
+      .analyzeMorphology("বইগুলিতেই")
+      .candidates.find((item) => item.normalized === "বই");
+    expect(candidate?.suffix).toContain("গুলি");
+    expect(candidate?.suffix).toContain("তে");
+    expect(candidate?.suffix).toContain("ই");
+  });
+
+  it("lemmatizes more conjugated verbs to their infinitive form", () => {
+    const infinitive = (word: string): string | undefined =>
+      adapter.analyzeMorphology(word).candidates.find((candidate) => candidate.reason === "lemma")?.normalized;
+
+    expect(infinitive("খেললাম")).toBe("খেলা");
+    expect(infinitive("দেখিয়েছি")).toBe("দেখা");
+  });
 });

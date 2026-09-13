@@ -18,6 +18,7 @@ import type {
   PopupSize,
   PopupTheme,
   SearchProvider,
+  Suggestion,
   TranslationProvider,
   WordSpan
 } from "./types.js";
@@ -205,6 +206,7 @@ export class BhashaLens {
   private readonly blockNativeMenu: boolean;
   private readonly fetcher?: typeof fetch;
   private readonly panels: PanelDescriptor[];
+  private currentAnchor?: DOMRect;
   private currentState?: PopupLookupState;
   private currentContext?: { lang: LanguageCode; normalized: string; word: string };
 
@@ -245,6 +247,7 @@ export class BhashaLens {
       new FloatingDictionaryPopup(this.doc, {
         onHide: () => this.highlighter?.clear(),
         onSelectPanel: this.handlePanelSelect,
+        onSelectSuggestion: this.handleSuggestionSelect,
         size: options.size,
         theme: options.theme
       });
@@ -289,7 +292,7 @@ export class BhashaLens {
 
     const found = result.response.entries.length > 0;
     return {
-      activePanel: found ? "dictionary" : this.fallbackPanel(),
+      activePanel: found ? "dictionary" : this.fallbackPanel(result.response.suggestions),
       externalLinks: createExternalLookupLinks(normalized),
       lookupWord: result.lookupWord,
       matchedCandidate: result.matchedCandidate,
@@ -299,6 +302,7 @@ export class BhashaLens {
       panelStates: {},
       response: result.response,
       status: found ? "ready" : "empty",
+      suggestions: result.response.suggestions,
       word
     };
   }
@@ -489,6 +493,7 @@ export class BhashaLens {
   private async lookupAndRender(candidate: LookupCandidate): Promise<void> {
     const lookupKey = `${candidate.lang}:${candidate.normalized}:${candidate.source}`;
     this.lastLookupKey = lookupKey;
+    this.currentAnchor = candidate.rect;
     this.abortController?.abort();
     const controller = new AbortController();
     this.abortController = controller;
@@ -517,7 +522,7 @@ export class BhashaLens {
       }
 
       const found = result.response.entries.length > 0;
-      const activePanel: PanelId = found ? "dictionary" : this.fallbackPanel();
+      const activePanel: PanelId = found ? "dictionary" : this.fallbackPanel(result.response.suggestions);
       const nextState: PopupLookupState = {
         activePanel,
         externalLinks: createExternalLookupLinks(candidate.normalized),
@@ -529,6 +534,7 @@ export class BhashaLens {
         panelStates: {},
         response: result.response,
         status: found ? "ready" : "empty",
+        suggestions: result.response.suggestions,
         word: candidate.word
       };
 
@@ -565,22 +571,46 @@ export class BhashaLens {
     }
   }
 
-  private fallbackPanel(): PanelId {
+  /**
+   * Where to land when no entry was found. If "did you mean" candidates exist,
+   * stay on the dictionary panel so they are visible; otherwise prefer the
+   * translation fallback.
+   */
+  private fallbackPanel(suggestions?: Suggestion[]): PanelId {
+    if (suggestions && suggestions.length > 0) {
+      return "dictionary";
+    }
     return this.translationProvider ? "translate" : "wikipedia";
   }
 
-  private readonly handlePanelSelect = (panel: PanelId): void => {
-    if (!this.currentState || this.currentState.activePanel === panel) {
-      this.currentState = this.currentState ? { ...this.currentState, activePanel: panel } : this.currentState;
-      if (this.currentState) {
-        this.popup.update(this.currentState);
-      }
-      void this.ensurePanelLoaded(panel, this.lastLookupKey);
+  /** Re-run the lookup for a clicked "did you mean" suggestion. */
+  private readonly handleSuggestionSelect = (word: string): void => {
+    const anchor = this.currentAnchor;
+    if (!anchor) {
       return;
     }
 
-    this.currentState = { ...this.currentState, activePanel: panel };
-    this.popup.update(this.currentState);
+    void this.lookupAndRender({
+      highlightRects: [anchor],
+      lang: this.adapter.lang,
+      normalized: this.adapter.normalize(word),
+      rect: anchor,
+      source: "pointer",
+      word
+    });
+  };
+
+  private readonly handlePanelSelect = (panel: PanelId): void => {
+    if (!this.currentState) {
+      return;
+    }
+
+    // Re-selecting the active panel keeps the state as-is (and retries a failed
+    // load); selecting a new one switches and lets the ensure-cache do its job.
+    if (this.currentState.activePanel !== panel) {
+      this.currentState = { ...this.currentState, activePanel: panel };
+      this.popup.update(this.currentState);
+    }
     void this.ensurePanelLoaded(panel, this.lastLookupKey);
   };
 

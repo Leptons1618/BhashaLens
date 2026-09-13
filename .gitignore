@@ -19,3 +19,6 @@ coverage
 
 # Generated bulk dictionary sources — reproduce with `pnpm fetch:source`
 downloads
+
+# Local agent tooling state
+.serena

@@ -13,6 +13,7 @@ const POPUP_Z_INDEX = "2147483647";
 export interface FloatingDictionaryPopupOptions {
   onHide?: () => void;
   onSelectPanel?: (panel: PanelId) => void;
+  onSelectSuggestion?: (word: string) => void;
   size?: PopupSize;
   theme?: PopupTheme;
 }
@@ -29,7 +30,7 @@ interface ThemeTokens {
   surface: string;
 }
 
-const THEMES: Record<PopupTheme, ThemeTokens> = {
+const THEMES: Record<Exclude<PopupTheme, "system">, ThemeTokens> = {
   parchment: {
     accent: "#27745d",
     accentText: "#fffaf0",
@@ -89,6 +90,24 @@ const SIZES: Record<PopupSize, SizeTokens> = {
   large: { body: "15px", maxW: "480px", minW: "360px", word: "26px" }
 };
 
+type ResolvedTheme = Exclude<PopupTheme, "system">;
+
+/** "system" follows the page's colour scheme; explicit themes pass through. */
+export function resolveTheme(theme: PopupTheme, prefersDark: boolean): ResolvedTheme {
+  if (theme === "system") {
+    return prefersDark ? "dark" : "parchment";
+  }
+  return theme;
+}
+
+const ACTIONS_ICONS = {
+  check:
+    '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg>',
+  copy: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+  speak:
+    '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>'
+} as const;
+
 const ICONS: Record<PanelId, string> = {
   dictionary:
     '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2z"/><path d="M4 19a2 2 0 0 0 2 2h12"/></svg>',
@@ -119,7 +138,28 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#039;");
 }
 
-function renderEntries(state: PopupLookupState): string {
+function renderSuggestions(state: PopupLookupState): string {
+  const suggestions = state.suggestions ?? [];
+  if (suggestions.length === 0) {
+    return "";
+  }
+
+  const buttons = suggestions
+    .map(
+      (suggestion) =>
+        `<button class="bl-suggestion" type="button" data-suggestion="${escapeHtml(suggestion.word)}" lang="bn">${escapeHtml(suggestion.word)}</button>`
+    )
+    .join("");
+
+  return `
+    <div class="bl-suggestions">
+      <div class="bl-suggestions-label">Did you mean</div>
+      <div class="bl-suggestion-list">${buttons}</div>
+    </div>
+  `;
+}
+
+function renderEntries(state: PopupLookupState, expanded: boolean): string {
   if (state.status === "loading") {
     return `<div class="bl-status">Looking up Bengali entry...</div>`;
   }
@@ -129,13 +169,21 @@ function renderEntries(state: PopupLookupState): string {
   }
 
   if (state.status === "empty" || !state.response?.entries.length) {
-    return `<div class="bl-status">No dictionary entry. Try <strong>Translate</strong> or <strong>Wikipedia</strong> on the left.</div>`;
+    return `<div class="bl-status">No dictionary entry. Try <strong>Translate</strong> or <strong>Wikipedia</strong> on the left.</div>${renderSuggestions(
+      state
+    )}`;
   }
 
-  return state.response.entries
-    .slice(0, 3)
+  const entries = state.response.entries;
+  const visible = expanded ? entries : entries.slice(0, 3);
+  const more =
+    !expanded && entries.length > visible.length
+      ? `<button class="bl-more" type="button" data-action="expand">Show all ${entries.length} senses</button>`
+      : "";
+
+  const rendered = visible
     .map((entry) => {
-      const meta = [entry.transliteration, entry.ipa, entry.partOfSpeech]
+      const meta = [entry.transliteration, entry.ipa, entry.partOfSpeech, entry.source]
         .filter((value): value is string => Boolean(value && value.trim()))
         .map((value) => `<span>${escapeHtml(value)}</span>`)
         .join("");
@@ -161,6 +209,8 @@ function renderEntries(state: PopupLookupState): string {
       `;
     })
     .join("");
+
+  return rendered + more;
 }
 
 function renderMorphology(state: PopupLookupState): string {
@@ -170,8 +220,17 @@ function renderMorphology(state: PopupLookupState): string {
   }
 
   const matched = state.matchedCandidate;
-  const matchedText = matched && matched.reason !== "exact" ? `Root match: ${escapeHtml(matched.normalized)}` : "Exact form";
-  const suffixText = matched?.suffix ? ` · suffix ${escapeHtml(matched.suffix)}` : "";
+  const matchedText =
+    !matched || matched.reason === "exact"
+      ? "Exact form"
+      : matched.reason === "form"
+        ? `Form of ${escapeHtml(matched.normalized)}`
+        : `Root match: ${escapeHtml(matched.normalized)}`;
+  const suffixText = matched?.suffix
+    ? matched.reason === "form"
+      ? ` · ${escapeHtml(matched.suffix)}`
+      : ` · suffix ${escapeHtml(matched.suffix)}`
+    : "";
 
   return `
     <div class="bl-morph">
@@ -278,7 +337,7 @@ function renderSearch(state: PopupLookupState, engine: "google" | "duckduckgo"):
   return `<div class="bl-search"><div class="bl-search-engine">${escapeHtml(label)}</div>${itemsHtml}</div>`;
 }
 
-function renderActivePanel(state: PopupLookupState): string {
+function renderActivePanel(state: PopupLookupState, expanded: boolean): string {
   switch (state.activePanel ?? "dictionary") {
     case "translate":
       return renderTranslate(state);
@@ -289,7 +348,7 @@ function renderActivePanel(state: PopupLookupState): string {
     case "duckduckgo":
       return renderSearch(state, "duckduckgo");
     default:
-      return `${renderMorphology(state)}${renderEntries(state)}`;
+      return `${renderMorphology(state)}${renderEntries(state, expanded)}`;
   }
 }
 
@@ -313,7 +372,12 @@ function renderRail(state: PopupLookupState): string {
   `;
 }
 
-function template(state: PopupLookupState, theme: PopupTheme, size: PopupSize): string {
+function template(
+  state: PopupLookupState,
+  theme: ResolvedTheme,
+  size: PopupSize,
+  options: { canSpeak: boolean; expanded: boolean }
+): string {
   const hasRail = (state.panels ?? []).length > 0;
   const t = THEMES[theme] ?? THEMES.parchment;
   const s = SIZES[size] ?? SIZES.medium;
@@ -384,7 +448,7 @@ function template(state: PopupLookupState, theme: PopupTheme, size: PopupSize): 
       .bl-main { display: flex; flex: 1 1 auto; flex-direction: column; min-width: 0; }
 
       .bl-head {
-        align-items: start;
+        align-items: flex-start;
         border-bottom: 1px solid var(--bl-border);
         display: flex;
         gap: 12px;
@@ -392,7 +456,10 @@ function template(state: PopupLookupState, theme: PopupTheme, size: PopupSize): 
         padding: 13px 15px 11px;
       }
 
-      .bl-word { font-size: var(--bl-word); font-weight: 700; line-height: 1.22; margin: 0; }
+      .bl-title { min-width: 0; }
+      .bl-actions { align-items: center; display: flex; flex: 0 0 auto; gap: 2px; }
+
+      .bl-word { font-size: var(--bl-word); font-weight: 700; line-height: 1.22; margin: 0; overflow-wrap: anywhere; }
 
       .bl-lang {
         color: var(--bl-muted);
@@ -404,12 +471,13 @@ function template(state: PopupLookupState, theme: PopupTheme, size: PopupSize): 
         text-transform: uppercase;
       }
 
-      .bl-close {
+      .bl-icon-btn {
         align-items: center; appearance: none; background: transparent; border: 0; border-radius: 6px;
         color: var(--bl-muted); cursor: pointer; display: inline-flex; font: 18px/1 ui-sans-serif, system-ui, sans-serif;
         height: 28px; justify-content: center; padding: 0; width: 28px;
       }
-      .bl-close:hover { background: var(--bl-surface); color: var(--bl-fg); }
+      .bl-icon-btn:hover { background: var(--bl-surface); color: var(--bl-fg); }
+      .bl-icon-btn.copied { color: var(--bl-accent); }
 
       .bl-body { max-height: 360px; overflow-y: auto; padding: 12px 15px 14px; }
 
@@ -443,6 +511,27 @@ function template(state: PopupLookupState, theme: PopupTheme, size: PopupSize): 
       .bl-status { color: var(--bl-muted); }
       .bl-error { color: #d9544a; }
 
+      .bl-more {
+        background: var(--bl-chip); border: 0; border-radius: 7px; color: var(--bl-chip-text);
+        cursor: pointer; display: block; font: 700 calc(var(--bl-fs) - 1.5px)/1 ui-sans-serif, system-ui, sans-serif;
+        margin: 12px auto 0; padding: 8px 11px;
+      }
+      .bl-more:hover { filter: brightness(0.97); }
+
+      /* Did-you-mean suggestions */
+      .bl-suggestions { margin-top: 13px; }
+      .bl-suggestions-label {
+        color: var(--bl-muted); font-family: ui-sans-serif, system-ui, sans-serif; font-size: 10px;
+        font-weight: 800; letter-spacing: 0.06em; margin-bottom: 7px; text-transform: uppercase;
+      }
+      .bl-suggestion-list { display: flex; flex-wrap: wrap; gap: 6px; }
+      .bl-suggestion {
+        background: var(--bl-chip); border: 0; border-radius: 999px; color: var(--bl-chip-text);
+        cursor: pointer; font-family: "Noto Sans Bengali", ui-sans-serif, system-ui, sans-serif;
+        font-size: calc(var(--bl-fs) - 1px); padding: 6px 11px;
+      }
+      .bl-suggestion:hover { filter: brightness(0.95); }
+
       /* Translate */
       .bl-translate { font-family: ui-sans-serif, system-ui, sans-serif; }
       .bl-tl-row { display: flex; flex-direction: column; gap: 3px; }
@@ -473,14 +562,22 @@ function template(state: PopupLookupState, theme: PopupTheme, size: PopupSize): 
       ${renderRail(state)}
       <div class="bl-main">
         <header class="bl-head">
-          <div>
+          <div class="bl-title">
             <h2 class="bl-word" lang="bn">${escapeHtml(state.word)}</h2>
             <div class="bl-lang">Bengali${hasRail ? ` · ${escapeHtml(state.activePanel ?? "dictionary")}` : ""}</div>
           </div>
-          <button class="bl-close" type="button" aria-label="Close dictionary popup">×</button>
+          <div class="bl-actions">
+            ${
+              options.canSpeak
+                ? `<button class="bl-icon-btn" type="button" data-action="speak" aria-label="Pronounce word" title="Pronounce">${ACTIONS_ICONS.speak}</button>`
+                : ""
+            }
+            <button class="bl-icon-btn" type="button" data-action="copy" aria-label="Copy word" title="Copy">${ACTIONS_ICONS.copy}</button>
+            <button class="bl-icon-btn bl-close" type="button" aria-label="Close dictionary popup" title="Close">×</button>
+          </div>
         </header>
         <div class="bl-body">
-          ${renderActivePanel(state)}
+          ${renderActivePanel(state, options.expanded)}
         </div>
       </div>
     </section>
@@ -490,10 +587,13 @@ function template(state: PopupLookupState, theme: PopupTheme, size: PopupSize): 
 export class FloatingDictionaryPopup implements PopupController {
   private cleanupPosition?: () => void;
   private readonly doc: Document;
+  private expanded = false;
   private host?: HTMLDivElement;
   private lastAnchor?: DOMRect;
+  private lastState?: PopupLookupState;
   private readonly onHide?: () => void;
   private readonly onSelectPanel?: (panel: PanelId) => void;
+  private readonly onSelectSuggestion?: (word: string) => void;
   private shadow?: ShadowRoot;
   private size: PopupSize;
   private theme: PopupTheme;
@@ -502,8 +602,9 @@ export class FloatingDictionaryPopup implements PopupController {
     this.doc = doc;
     this.onHide = options.onHide;
     this.onSelectPanel = options.onSelectPanel;
+    this.onSelectSuggestion = options.onSelectSuggestion;
     this.size = options.size ?? "medium";
-    this.theme = options.theme ?? "parchment";
+    this.theme = options.theme ?? "system";
   }
 
   setAppearance(theme: PopupTheme, size: PopupSize): void {
@@ -517,11 +618,14 @@ export class FloatingDictionaryPopup implements PopupController {
 
   destroy(): void {
     this.cleanupPosition?.();
+    this.doc.defaultView?.speechSynthesis?.cancel();
     this.host?.remove();
     this.cleanupPosition = undefined;
     this.host = undefined;
     this.shadow = undefined;
     this.lastAnchor = undefined;
+    this.lastState = undefined;
+    this.expanded = false;
   }
 
   hide(): void {
@@ -535,6 +639,7 @@ export class FloatingDictionaryPopup implements PopupController {
 
   show(anchor: DOMRect, state: PopupLookupState): void {
     this.lastAnchor = anchor;
+    this.expanded = false;
     this.ensureHost();
     this.render(state);
     this.host!.hidden = false;
@@ -607,8 +712,43 @@ export class FloatingDictionaryPopup implements PopupController {
       return;
     }
 
-    this.shadow.innerHTML = template(state, this.theme, this.size);
+    this.lastState = state;
+    const win = this.doc.defaultView;
+    const prefersDark = win?.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
+    const canSpeak = Boolean(win?.speechSynthesis && win?.SpeechSynthesisUtterance);
+
+    this.shadow.innerHTML = template(state, resolveTheme(this.theme, prefersDark), this.size, {
+      canSpeak,
+      expanded: this.expanded
+    });
     this.shadow.querySelector(".bl-close")?.addEventListener("click", () => this.hide());
+
+    this.shadow.querySelector<HTMLButtonElement>("[data-action='copy']")?.addEventListener("click", (event) => {
+      this.copyWord(event.currentTarget as HTMLButtonElement);
+    });
+    this.shadow.querySelector<HTMLButtonElement>("[data-action='speak']")?.addEventListener("click", () => {
+      this.speak();
+    });
+    this.shadow.querySelector<HTMLButtonElement>("[data-action='expand']")?.addEventListener("click", () => {
+      this.expanded = true;
+      if (this.lastState) {
+        this.render(this.lastState);
+      }
+      if (this.lastAnchor) {
+        this.position(this.lastAnchor);
+      }
+    });
+
+    if (this.onSelectSuggestion) {
+      this.shadow.querySelectorAll<HTMLButtonElement>("[data-suggestion]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const word = button.dataset.suggestion;
+          if (word) {
+            this.onSelectSuggestion?.(word);
+          }
+        });
+      });
+    }
 
     if (this.onSelectPanel) {
       this.shadow.querySelectorAll<HTMLButtonElement>(".bl-tab").forEach((button) => {
@@ -620,5 +760,45 @@ export class FloatingDictionaryPopup implements PopupController {
         });
       });
     }
+  }
+
+  private copyWord(button: HTMLButtonElement): void {
+    const text = this.lastState?.normalized;
+    const win = this.doc.defaultView;
+    if (!text || !win?.navigator?.clipboard) {
+      return;
+    }
+
+    void win.navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        button.classList.add("copied");
+        button.innerHTML = ACTIONS_ICONS.check;
+        win.setTimeout(() => {
+          button.classList.remove("copied");
+          button.innerHTML = ACTIONS_ICONS.copy;
+        }, 1200);
+      })
+      .catch(() => undefined);
+  }
+
+  private speak(): void {
+    const text = this.lastState?.normalized;
+    const win = this.doc.defaultView;
+    const synth = win?.speechSynthesis;
+    const Utterance = win?.SpeechSynthesisUtterance;
+    if (!text || !win || !synth || !Utterance) {
+      return;
+    }
+
+    const utterance = new Utterance(text);
+    utterance.lang = "bn-BD";
+    utterance.rate = 0.9;
+    const voice = synth.getVoices().find((item) => item.lang?.toLowerCase().startsWith("bn"));
+    if (voice) {
+      utterance.voice = voice;
+    }
+    synth.cancel();
+    synth.speak(utterance);
   }
 }

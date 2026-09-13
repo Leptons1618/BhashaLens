@@ -15,7 +15,7 @@ export interface WordSpan {
 export interface MorphologyCandidate {
   confidence: number;
   normalized: string;
-  reason: "exact" | "suffix-strip" | "lemma";
+  reason: "exact" | "suffix-strip" | "lemma" | "form";
   suffix?: string;
 }
 
@@ -63,6 +63,17 @@ export interface LookupResponse {
   matchedCandidate?: MorphologyCandidate;
   morphology?: MorphologyAnalysis;
   query: LookupQuery;
+  /** "Did you mean" candidates, present when the lookup found nothing. */
+  suggestions?: Suggestion[];
+}
+
+export interface Suggestion {
+  distance?: number;
+  frequency?: number;
+  inDictionary?: boolean;
+  normalized?: string;
+  prefix?: boolean;
+  word: string;
 }
 
 export interface DictionaryProvider {
@@ -107,7 +118,7 @@ export interface SearchProvider {
   search(query: string, engines?: string[], signal?: AbortSignal): Promise<SearchResponse>;
 }
 
-export type PopupTheme = "parchment" | "green" | "dark" | "light";
+export type PopupTheme = "system" | "parchment" | "green" | "dark" | "light";
 export type PopupSize = "small" | "medium" | "large";
 
 /** Definer-style side panels: alternative ways to read a word's meaning. */
@@ -144,6 +155,7 @@ export interface PopupLookupState {
   panels?: PanelDescriptor[];
   response?: LookupResponse;
   status: LookupStateStatus;
+  suggestions?: Suggestion[];
   word: string;
 }
 

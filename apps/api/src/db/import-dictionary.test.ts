@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseDictionaryRecord } from "./import-dictionary.js";
+import { parseDictionaryForms, parseDictionaryRecord } from "./import-dictionary.js";
 
 // A trimmed Kaikki/Wiktextract Bengali record covering the fields the importer reads.
 const kaikkiRecord = {
@@ -72,5 +72,47 @@ describe("parseDictionaryRecord (Wiktextract)", () => {
     );
     expect(entry.word).toBe("ভাষা");
     expect(entry.transliteration).toBe("bhasha");
+  });
+});
+
+describe("parseDictionaryForms (Wiktextract)", () => {
+  const verbRecord = {
+    word: "যাওয়া",
+    lang_code: "bn",
+    pos: "verb",
+    forms: [
+      { form: "jaōẇa", tags: ["romanization"] },
+      { form: "no-table-tags", tags: ["table-tags"] },
+      { form: "bn-conj-যাওয়া", tags: ["inflection-template"] },
+      { form: "যাওয়া", tags: ["noun-from-verb"] },
+      { form: "যেতে", tags: ["infinitive"] },
+      { form: "গেলাম", tags: ["first-person", "past"] },
+      { form: "গেলাম", tags: ["first-person", "past"] }
+    ]
+  };
+
+  it("mines inflected forms with their lemma and grammatical tags", () => {
+    const forms = parseDictionaryForms(verbRecord);
+    expect(forms.map((form) => form.normalized)).toEqual(["যেতে", "গেলাম"]);
+    expect(forms[1]).toMatchObject({
+      form: "গেলাম",
+      lemma: "যাওয়া",
+      lemmaWord: "যাওয়া",
+      normalized: "গেলাম",
+      tags: ["first-person", "past"]
+    });
+  });
+
+  it("skips romanization, table scaffolding, and the identity form", () => {
+    const values = parseDictionaryForms(verbRecord).map((form) => form.form);
+    expect(values).not.toContain("jaōẇa");
+    expect(values).not.toContain("no-table-tags");
+    expect(values).not.toContain("যাওয়া");
+  });
+
+  it("ignores non-Bengali records", () => {
+    expect(parseDictionaryForms({ lang_code: "en", word: "go", forms: [{ form: "went" }] })).toEqual([]);
+    expect(parseDictionaryForms({ lang_code: "bn", word: "hello", forms: [] })).toEqual([]);
+    expect(parseDictionaryForms(null)).toEqual([]);
   });
 });
