@@ -10,6 +10,7 @@ import { and, desc, eq, like, or, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { DbContext } from "./db/client.js";
 import { dictionaryEntries, dictionarySources, type DictionaryEntryRow } from "./db/schema.js";
+import { scanReviewQueue } from "./db/scan-review.js";
 import { ADMIN_PAGE } from "./admin-page.js";
 
 interface EntryBody {
@@ -28,6 +29,12 @@ interface ListQuery {
   offset?: string;
   q?: string;
   source?: string;
+}
+
+interface ReviewQuery {
+  limit?: string;
+  offset?: string;
+  rule?: string;
 }
 
 export interface RegisterAdminOptions {
@@ -64,6 +71,8 @@ function mapRow(row: DictionaryEntryRow) {
     lang: row.lang,
     normalized: row.normalized,
     partOfSpeech: row.partOfSpeech,
+    reviewNote: row.reviewNote ?? "",
+    reviewStatus: row.reviewStatus,
     source: row.source ?? "",
     synonyms: Array.isArray(row.synonyms) ? row.synonyms : [],
     transliteration: row.transliteration,
@@ -189,8 +198,70 @@ export function registerAdminRoutes(
       .from(dictionaryEntries)
       .groupBy(dictionaryEntries.source)
       .all();
-    return { counts, sources };
+    const flaggedRow = dbContext.db
+      .select({ count: sql<number>`count(*)` })
+      .from(dictionaryEntries)
+      .where(and(eq(dictionaryEntries.lang, "bn"), eq(dictionaryEntries.reviewStatus, "flagged")))
+      .get();
+    return { counts, flagged: flaggedRow?.count ?? 0, sources };
   });
+
+  app.post("/admin/reviews/scan", { preHandler: guard }, async () => scanReviewQueue(dbContext));
+
+  app.get<{ Querystring: ReviewQuery }>("/admin/reviews", { preHandler: guard }, async (request) => {
+    const limit = Math.min(Math.max(Number.parseInt(request.query.limit ?? "50", 10) || 50, 1), 200);
+    const offset = Math.max(Number.parseInt(request.query.offset ?? "0", 10) || 0, 0);
+    const rule = readString(request.query.rule);
+
+    const conditions = [eq(dictionaryEntries.lang, "bn"), eq(dictionaryEntries.reviewStatus, "flagged")];
+    if (rule) {
+      conditions.push(like(dictionaryEntries.reviewNote, `%${rule}%`)!);
+    }
+    const where = and(...conditions);
+    const totalRow = dbContext.db.select({ count: sql<number>`count(*)` }).from(dictionaryEntries).where(where).get();
+    const frequency = sql<number>`coalesce(
+      (select freq.count from word_frequencies freq
+       where freq.lang = dictionary_entries.lang and freq.normalized = dictionary_entries.normalized), 0)`;
+
+    const rows = dbContext.db
+      .select()
+      .from(dictionaryEntries)
+      .where(where)
+      .orderBy(desc(frequency))
+      .limit(limit)
+      .offset(offset)
+      .all();
+
+    return { entries: rows.map(mapRow), limit, offset, total: totalRow?.count ?? 0 };
+  });
+
+  app.post<{ Body: { status?: string }; Params: { id: string } }>(
+    "/admin/reviews/:id/resolve",
+    { preHandler: guard },
+    async (request, reply) => {
+      const id = Number.parseInt(request.params.id, 10);
+      if (!Number.isInteger(id)) {
+        return reply.code(400).send({ error: "Invalid id" });
+      }
+
+      const status = readString(request.body?.status);
+      if (status !== "approved" && status !== "dismissed") {
+        return reply.code(400).send({ error: "status must be 'approved' or 'dismissed'" });
+      }
+
+      const [row] = dbContext.db
+        .update(dictionaryEntries)
+        .set({ reviewStatus: status })
+        .where(eq(dictionaryEntries.id, id))
+        .returning()
+        .all();
+
+      if (!row) {
+        return reply.code(404).send({ error: "Entry not found" });
+      }
+      return { entry: mapRow(row) };
+    }
+  );
 
   app.post<{ Body: EntryBody }>("/admin/entries", { preHandler: guard }, async (request, reply) => {
     const { error, value } = validateEntry(request.body ?? {}, adapter);

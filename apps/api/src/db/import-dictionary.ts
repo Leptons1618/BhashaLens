@@ -6,12 +6,14 @@ import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { createDbContext } from "./client.js";
 import { resolveSourceByLocalPath, SOURCE_REGISTRY } from "./sources.js";
+import { parseWordNetYaml, type WordNetSynset } from "./wordnet.js";
 
-type ImportFormat = "json" | "jsonl" | "tsv";
+type ImportFormat = "json" | "jsonl" | "tsv" | "yaml";
 
 interface ImportOptions {
   filePath: string;
   format?: ImportFormat;
+  formsOnly?: boolean;
   limit?: number;
   replace?: boolean;
   source?: string;
@@ -136,6 +138,8 @@ function parseArgs(argv: string[]): ImportOptions {
     const flag = flags[index];
     if (flag === "--replace") {
       options.replace = true;
+    } else if (flag === "--forms-only") {
+      options.formsOnly = true;
     } else if (flag === "--source") {
       options.source = flags[index + 1];
       index += 1;
@@ -159,6 +163,10 @@ function detectFormat(filePath: string, explicit?: ImportFormat): ImportFormat {
   const extension = extname(filePath).toLowerCase();
   if (extension === ".jsonl" || extension === ".ndjson") {
     return "jsonl";
+  }
+
+  if (extension === ".yaml" || extension === ".yml") {
+    return "yaml";
   }
 
   if (extension === ".tsv") {
@@ -259,6 +267,20 @@ export interface WordForm {
 /** Forms that are not inflections: romanization and table scaffolding. */
 const FORM_SKIP_TAGS = new Set(["romanization", "table-tags", "inflection-template"]);
 
+/** A single, script-only Bengali word (no spaces, slashes, hyphens, or notes). */
+const CLEAN_BENGALI_FORM_RE = /^[\u0980-\u09FF\u200c\u200d]+$/u;
+
+/**
+ * Kaikki sometimes renders a form as `word / romanization (note)` or leaves
+ * table-note rows like `-রে marks this case instead of …`. Keep only the first
+ * token when it is a self-contained Bengali word; drop everything else rather
+ * than index a phrase or a note fragment as an inflected form.
+ */
+function cleanFormValue(value: string): string | null {
+  const beforeSlash = value.split("/", 1)[0]!.trim();
+  return CLEAN_BENGALI_FORM_RE.test(beforeSlash) ? beforeSlash : null;
+}
+
 /**
  * Mine Wiktionary `forms[]` into inflected form → lemma mappings. This covers
  * what rules cannot derive — most usefully irregular verbs such as
@@ -285,9 +307,14 @@ export function parseDictionaryForms(raw: unknown): WordForm[] {
   const forms: WordForm[] = [];
 
   for (const form of record.forms ?? []) {
-    const value = readString(form.form);
+    const rawValue = readString(form.form);
     const tags = form.tags ?? [];
-    if (!value || tags.some((tag) => FORM_SKIP_TAGS.has(tag)) || !adapter.detect(value)) {
+    if (!rawValue || tags.some((tag) => FORM_SKIP_TAGS.has(tag))) {
+      continue;
+    }
+
+    const value = cleanFormValue(rawValue);
+    if (!value || !adapter.detect(value)) {
       continue;
     }
 
@@ -332,8 +359,25 @@ function fromBengaliThesaurus(record: Record<string, unknown>, source: string): 
   return entry ? [entry] : [];
 }
 
-function fromRecord(raw: unknown, source: string): DictionaryEntry[] {
-  if (!raw || typeof raw !== "object") {
+/** Map one Bangla WordNet synset to one entry per member word. */
+function fromWordNetSynset(synset: WordNetSynset, source: string): DictionaryEntry[] {
+  return synset.words.flatMap((word, index) => {
+    const entry = normalizeEntry(
+      {
+        definition: synset.concept,
+        examples: synset.example ? [synset.example] : undefined,
+        partOfSpeech: synset.category.toLowerCase() || "unknown",
+        source,
+        synonyms: synset.words.filter((_, other) => other !== index),
+        word
+      },
+      source
+    );
+    return entry ? [entry] : [];
+  });
+}
+
+function fromRecord(raw: unknown, source: string): DictionaryEntry[] {  if (!raw || typeof raw !== "object") {
     return [];
   }
 
@@ -413,6 +457,12 @@ async function loadJsonlEntries(filePath: string, source: string, limit?: number
   return result;
 }
 
+async function loadYamlEntries(filePath: string, source: string): Promise<LoadedEntries> {
+  const raw = (await readFile(filePath, "utf8")).replace(/^﻿/, "");
+  const entries = parseWordNetYaml(raw).flatMap((synset) => fromWordNetSynset(synset, source));
+  return { entries, forms: [] };
+}
+
 async function loadTsvEntries(filePath: string, source: string): Promise<LoadedEntries> {
   const lines = (await readFile(filePath, "utf8")).split(/\r?\n/u).filter((line) => line.trim().length > 0);
   if (lines.length < 2) {
@@ -441,6 +491,11 @@ async function loadEntries(options: ImportOptions): Promise<LoadedEntries> {
     return { entries: options.limit ? loaded.entries.slice(0, options.limit) : loaded.entries, forms: [] };
   }
 
+  if (format === "yaml") {
+    const loaded = await loadYamlEntries(options.filePath, source);
+    return { entries: options.limit ? loaded.entries.slice(0, options.limit) : loaded.entries, forms: [] };
+  }
+
   const loaded = await loadJsonEntries(options.filePath, source);
   return { entries: options.limit ? loaded.entries.slice(0, options.limit) : loaded.entries, forms: loaded.forms };
 }
@@ -452,6 +507,11 @@ export async function importDictionaryFile(options: ImportOptions): Promise<{ fo
 
   if (options.replace) {
     context.sqlite.prepare("DELETE FROM dictionary_entries WHERE lang = ?").run("bn");
+    context.sqlite.prepare("DELETE FROM word_forms WHERE lang = ?").run("bn");
+  }
+
+  // Re-mining forms (e.g. after a parser fix) without touching entries.
+  if (options.formsOnly) {
     context.sqlite.prepare("DELETE FROM word_forms WHERE lang = ?").run("bn");
   }
 
@@ -489,15 +549,17 @@ export async function importDictionaryFile(options: ImportOptions): Promise<{ fo
 
   const writeMany = context.sqlite.transaction((rows: DictionaryEntry[], formRows: WordForm[]) => {
     let inserted = 0;
-    for (const row of rows) {
-      const result = insert.run({
-        ...row,
-        ipa: row.ipa ?? null,
-        source: row.source ?? null,
-        examples: row.examples ? JSON.stringify(row.examples) : null,
-        synonyms: row.synonyms ? JSON.stringify(row.synonyms) : null
-      });
-      inserted += result.changes;
+    if (!options.formsOnly) {
+      for (const row of rows) {
+        const result = insert.run({
+          ...row,
+          ipa: row.ipa ?? null,
+          source: row.source ?? null,
+          examples: row.examples ? JSON.stringify(row.examples) : null,
+          synonyms: row.synonyms ? JSON.stringify(row.synonyms) : null
+        });
+        inserted += result.changes;
+      }
     }
 
     let formsInserted = 0;

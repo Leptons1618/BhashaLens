@@ -46,17 +46,34 @@ TABLE_RE = re.compile(r"\{\|.*?\|\}", re.DOTALL)
 TEMPLATE_RE = re.compile(r"\{\{[^{}]*\}\}", re.DOTALL)
 URL_RE = re.compile(r"https?://\S+")
 TAG_RE = re.compile(r"<[^>]*>")
+# Namespace link targets are wiki machinery, not article prose. Dropping them
+# removes the biggest source of meta words (বিষয়শ্রেণী, চিত্র, টেমপ্লেট, …).
+NAMESPACE_LINK_RE = re.compile(
+    r"\[\[\s*(?:বিষয়শ্রেণী|শ্রেণী|চিত্র|ফাইল|মিডিয়া|টেমপ্লেট|সাহায্য|উইকিপিডিয়া|ব্যবহারকারী|"
+    r"Category|File|Image|Media|Template|Help|Wikipedia|User)\s*:[^\[\]]*\]\]",
+    re.IGNORECASE,
+)
+# "#পুনর্নির্দেশ [[target]]" redirect lines carry no definitional text.
+REDIRECT_RE = re.compile(r"^[^\n]*#\s*(?:পুনর্নির্দেশ|অনুপ্রেরণ|REDIRECT)[^\n]*$", re.MULTILINE | re.IGNORECASE)
+# [[target]] or [[target|label]] becomes the visible text.
+WIKI_LINK_RE = re.compile(r"\[\[(?:[^\[\]|]*\|)?([^\[\]|]*)\]\]")
+# [https://example.org label] keeps only the label.
+EXT_LINK_RE = re.compile(r"\[(?:https?:)?//\S+\s*([^\]]*)\]")
 
 
 def strip_markup(text: str) -> str:
     text = COMMENT_RE.sub(" ", text)
     text = REF_RE.sub(" ", text)
     text = TABLE_RE.sub(" ", text)
+    text = NAMESPACE_LINK_RE.sub(" ", text)
+    text = REDIRECT_RE.sub(" ", text)
     # Innermost templates only; nested templates lose a few braces but their
     # Bengali parameters are noise for frequency purposes anyway.
-    for _ in range(3):
+    for _ in range(4):
         text = TEMPLATE_RE.sub(" ", text)
     text = URL_RE.sub(" ", text)
+    text = EXT_LINK_RE.sub(r"\1", text)
+    text = WIKI_LINK_RE.sub(r"\1", text)
     text = TAG_RE.sub(" ", text)
     return text
 

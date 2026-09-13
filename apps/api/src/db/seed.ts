@@ -50,14 +50,23 @@ async function loadEntries(): Promise<DictionaryEntryInsert[]> {
   return parsed.map(toInsert).filter((entry) => adapter.detect(entry.normalized));
 }
 
-export async function seedDictionary(): Promise<{ count: number }> {
+export interface SeedOptions {
+  /** Clear all Bengali entries first (used by `seed:all`, not by plain `seed`). */
+  replace?: boolean;
+}
+
+export async function seedDictionary(options: SeedOptions = {}): Promise<{ count: number }> {
   const context = createDbContext();
   const rows = await loadEntries();
 
-  context.db.delete(dictionaryEntries).where(eq(dictionaryEntries.lang, "bn")).run();
+  if (options.replace) {
+    context.db.delete(dictionaryEntries).where(eq(dictionaryEntries.lang, "bn")).run();
+  }
 
   if (rows.length > 0) {
-    context.db.insert(dictionaryEntries).values(rows).run();
+    // Plain `seed` is additive so it cannot wipe imported bulk data by accident;
+    // `seed:all` opts into the full reset.
+    context.db.insert(dictionaryEntries).values(rows).onConflictDoNothing().run();
   }
 
   context.sqlite.close();
@@ -65,6 +74,6 @@ export async function seedDictionary(): Promise<{ count: number }> {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const result = await seedDictionary();
+  const result = await seedDictionary({ replace: process.argv.includes("--replace") });
   console.log(`Seeded ${result.count} Bengali dictionary entries.`);
 }

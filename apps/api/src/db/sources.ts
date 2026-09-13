@@ -8,7 +8,7 @@
  * definitions instead.
  */
 
-export type SourceFormat = "json" | "jsonl" | "tsv";
+export type SourceFormat = "json" | "jsonl" | "tsv" | "yaml";
 
 export interface DictionarySource {
   /** Stable key stored in `dictionary_entries.source` and `dictionary_sources.key`. */
@@ -73,6 +73,19 @@ export const SOURCE_REGISTRY: Record<string, DictionarySource> = {
     attribution: "Word frequencies derived from the Bengali Wikipedia dump (Wikimedia Foundation, CC BY-SA 4.0).",
     description:
       "Ranked Bengali word forms built by scripts/build-frequencies.py. Used to rank entries and morphological candidates; the generated TSV stays out of git."
+  },
+  "bangla-wordnet": {
+    key: "bangla-wordnet",
+    title: "Bangla WordNet (soumenganguly/Bangla-Wordnet)",
+    format: "yaml",
+    downloadUrl: "https://raw.githubusercontent.com/soumenganguly/Bangla-Wordnet/master/load/synsets.yaml",
+    localPath: "downloads/bn-wordnet.yaml",
+    homepage: "https://github.com/soumenganguly/Bangla-Wordnet",
+    license: "GPL-3.0",
+    licenseUrl: "https://www.gnu.org/licenses/gpl-3.0.html",
+    attribution: "Bengali synsets, glosses, examples, and synonyms from the Bangla WordNet project (GPL-3.0).",
+    description:
+      "~29.7k Bengali synsets with Bengali definitions (CONCEPT), usage examples, and synonym sets. Copyleft (GPL-3.0): opt-in source, not bundled into `seed:all`."
   },
   seed: {
     key: "seed",

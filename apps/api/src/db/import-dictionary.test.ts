@@ -1,5 +1,9 @@
-import { describe, expect, it } from "vitest";
-import { parseDictionaryForms, parseDictionaryRecord } from "./import-dictionary.js";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import { createDbContext } from "./client.js";
+import { importDictionaryFile, parseDictionaryForms, parseDictionaryRecord } from "./import-dictionary.js";
 
 // A trimmed Kaikki/Wiktextract Bengali record covering the fields the importer reads.
 const kaikkiRecord = {
@@ -75,6 +79,49 @@ describe("parseDictionaryRecord (Wiktextract)", () => {
   });
 });
 
+describe("Bangla WordNet import", () => {
+  const previousDatabaseFile = process.env.DATABASE_FILE;
+
+  afterEach(() => {
+    if (previousDatabaseFile === undefined) {
+      delete process.env.DATABASE_FILE;
+    } else {
+      process.env.DATABASE_FILE = previousDatabaseFile;
+    }
+  });
+
+  it("maps synsets to entries with Bengali glosses and synonyms", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "bhashalens-wordnet-"));
+    process.env.DATABASE_FILE = join(dir, "test.sqlite");
+    const filePath = join(dir, "wordnet.yaml");
+    writeFileSync(
+      filePath,
+      [
+        "-",
+        " ID: 1",
+        " CAT: ADJECTIVE",
+        " CONCEPT: যে জন্মগ্রহণ করেনি",
+        ' EXAMPLE: "সে অজাত"',
+        " SYNSET-BENGALI: অজাত, অনুত্পন্ন, অনুদ্ভূত"
+      ].join("\n")
+    );
+
+    const result = await importDictionaryFile({ filePath, source: "bangla-wordnet" });
+    expect(result.inserted).toBe(3);
+
+    const context = createDbContext();
+    const row = context.sqlite
+      .prepare("SELECT definition, part_of_speech, examples, synonyms FROM dictionary_entries WHERE normalized = ?")
+      .get("অজাত") as { definition: string; part_of_speech: string; examples: string; synonyms: string };
+    context.sqlite.close();
+
+    expect(row.definition).toBe("যে জন্মগ্রহণ করেনি");
+    expect(row.part_of_speech).toBe("adjective");
+    expect(JSON.parse(row.examples)).toEqual(["সে অজাত"]);
+    expect(JSON.parse(row.synonyms)).toEqual(["অনুত্পন্ন", "অনুদ্ভূত"]);
+  });
+});
+
 describe("parseDictionaryForms (Wiktextract)", () => {
   const verbRecord = {
     word: "যাওয়া",
@@ -86,7 +133,9 @@ describe("parseDictionaryForms (Wiktextract)", () => {
       { form: "bn-conj-যাওয়া", tags: ["inflection-template"] },
       { form: "যাওয়া", tags: ["noun-from-verb"] },
       { form: "যেতে", tags: ["infinitive"] },
-      { form: "গেলাম", tags: ["first-person", "past"] },
+      { form: "গেলাম / gelam (semantically definite))", tags: ["first-person", "past"] },
+      { form: "-রে marks this case instead of -কে (-ke).", tags: ["objective"] },
+      { form: "আরও বাংলা", tags: ["adjective"] },
       { form: "গেলাম", tags: ["first-person", "past"] }
     ]
   };
@@ -103,11 +152,13 @@ describe("parseDictionaryForms (Wiktextract)", () => {
     });
   });
 
-  it("skips romanization, table scaffolding, and the identity form", () => {
+  it("skips romanization, table scaffolding, the identity form, phrase rows, and notes", () => {
     const values = parseDictionaryForms(verbRecord).map((form) => form.form);
     expect(values).not.toContain("jaōẇa");
     expect(values).not.toContain("no-table-tags");
     expect(values).not.toContain("যাওয়া");
+    expect(values).not.toContain("-রে marks this case instead of -কে (-ke).");
+    expect(values).not.toContain("আরও বাংলা");
   });
 
   it("ignores non-Bengali records", () => {

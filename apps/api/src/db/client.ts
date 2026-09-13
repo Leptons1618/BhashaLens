@@ -38,6 +38,8 @@ export function ensureSchema(sqlite: Database.Database): void {
       source TEXT,
       synonyms TEXT,
       examples TEXT,
+      review_status TEXT NOT NULL DEFAULT 'unreviewed',
+      review_note TEXT,
       created_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
 
@@ -110,6 +112,9 @@ export function ensureSchema(sqlite: Database.Database): void {
 
   // Idempotent migration for databases created before the ipa column existed.
   ensureColumn(sqlite, "dictionary_entries", "ipa", "TEXT");
+  // Review queue columns (added with the low-confidence scanner).
+  ensureColumn(sqlite, "dictionary_entries", "review_status", "TEXT NOT NULL DEFAULT 'unreviewed'");
+  ensureColumn(sqlite, "dictionary_entries", "review_note", "TEXT");
 }
 
 export function createDbContext(databaseFile?: string): DbContext {

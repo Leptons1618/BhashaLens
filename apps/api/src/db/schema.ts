@@ -15,6 +15,8 @@ export const dictionaryEntries = sqliteTable(
     source: text("source"),
     synonyms: text("synonyms", { mode: "json" }).$type<string[]>(),
     examples: text("examples", { mode: "json" }).$type<string[]>(),
+    reviewStatus: text("review_status").notNull().default("unreviewed"),
+    reviewNote: text("review_note"),
     createdAt: integer("created_at").notNull().default(sql`(unixepoch())`)
   },
   (table) => ({

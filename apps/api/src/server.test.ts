@@ -301,6 +301,43 @@ describe("admin API", () => {
     await app.close();
   });
 
+  it("scans, lists, and resolves the review queue", async () => {
+    const dbContext = createDbContext(":memory:");
+    const app = await createServer({ dbContext, logger: false });
+
+    await app.inject({
+      method: "POST",
+      url: "/admin/entries",
+      payload: { definition: "genitive of নদী", partOfSpeech: "noun", transliteration: "nodir", word: "নদীর" }
+    });
+    await app.inject({
+      method: "POST",
+      url: "/admin/entries",
+      payload: { definition: "A river.", partOfSpeech: "noun", transliteration: "nodi", word: "নদী" }
+    });
+
+    const scan = await app.inject({ method: "POST", url: "/admin/reviews/scan" });
+    expect(scan.json().flagged).toBe(1);
+
+    const list = (await app.inject({ method: "GET", url: "/admin/reviews" })).json();
+    expect(list.total).toBe(1);
+    const entry = list.entries[0];
+    expect(entry.word).toBe("নদীর");
+    expect(entry.reviewStatus).toBe("flagged");
+    expect(entry.reviewNote).toContain("cross-reference");
+
+    const resolved = await app.inject({
+      method: "POST",
+      url: `/admin/reviews/${entry.id}/resolve`,
+      payload: { status: "approved" }
+    });
+    expect(resolved.statusCode).toBe(200);
+    expect(resolved.json().entry.reviewStatus).toBe("approved");
+
+    expect((await app.inject({ method: "GET", url: "/admin/reviews" })).json().total).toBe(0);
+    await app.close();
+  });
+
   it("serves the admin editor page", async () => {
     const dbContext = createDbContext(":memory:");
     const app = await createServer({ dbContext, logger: false });

@@ -34,7 +34,7 @@ async function rebuild(): Promise<void> {
     await downloadSource(source, false);
   }
 
-  const seeded = await seedDictionary();
+  const seeded = await seedDictionary({ replace: true });
   console.log(`• Seeded ${seeded.count} curated entries (source: seed).`);
 
   const imported = await importDictionaryFile({ filePath, source: "wiktextract" });

@@ -44,6 +44,49 @@ then prefer the most common morphological candidate when several match (e.g.
 git. The morphology rules behind candidate generation are documented in
 [docs/research/bengali-nlp-notes.md](docs/research/bengali-nlp-notes.md).
 
+### Coverage report
+
+```bash
+pnpm report:missing     # ranked list of common words with no dictionary coverage
+```
+
+Replays the lookup resolution order (exact entry → Wiktionary form → morphology)
+over the frequency list and writes the gaps to
+`downloads/bn-missing-entries.tsv` (top 25 also printed). Accepts
+`--limit`, `--min-count`, and `--output`; use it to target imports and manual
+entries. The thesaurus import below fills many of these gaps.
+
+### Closing gaps (opt-in)
+
+Both sources below are copyleft (GPL-3.0), so they are kept separate from
+`seed:all` and stay out of git:
+
+```bash
+# Bengali thesaurus: bn→bn synonyms as definitions (~15.6k new entries)
+pnpm --filter @bhashalens/api fetch:source bengali-thesaurus
+pnpm --filter @bhashalens/api import:dictionary ../../downloads/bn-thesaurus.json --source bengali-thesaurus
+
+# Bangla WordNet: ~29.7k synsets with Bengali glosses, examples, synonyms (~50k entries)
+pnpm --filter @bhashalens/api fetch:source bangla-wordnet
+pnpm --filter @bhashalens/api import:dictionary ../../downloads/bn-wordnet.yaml --source bangla-wordnet
+```
+
+Measured on the top 20k words, that took missing coverage from **56.4% → 29.9%**
+(thesaurus → WordNet), plus 26 curated `seed` entries for the highest-frequency
+remaining gaps. The report is the feedback loop: import, re-run, repeat.
+
+### Lemmatization benchmark
+
+```bash
+pnpm benchmark:lemmas    # rules-only accuracy over 38k Wiktionary form→lemma pairs
+```
+
+Replays every Wiktionary form through the morphology analyzer with the form
+table hidden. Current result: **66.5%** of non-headword forms find their lemma
+by rules (nominal **88.3%**, verbs **26.9%**). Irregular verb forms need the
+`word_forms` table, which is exactly why it exists — no POS model required yet.
+Full numbers and reasoning: [docs/research/bengali-nlp-notes.md](docs/research/bengali-nlp-notes.md).
+
 The API defaults to `http://localhost:8787`. Then build/load the extension for
 your browser (below) and select Bengali text on any website. The toolbar popup
 switches the trigger between `Select`, `Click`, and `Both`.
@@ -213,3 +256,17 @@ add, edit, and delete entries by hand. It is backed by a small CRUD API
 (`GET/POST /admin/entries`, `PUT/DELETE /admin/entries/:id`, `GET /admin/sources`).
 New entries default to the `manual` source. Set `ADMIN_TOKEN` to require an
 `x-admin-token` header (the page has a field that stores and sends it).
+
+### Review queue
+
+```bash
+pnpm scan:review              # flag low-confidence entries (add -- --reset to re-scan)
+```
+
+Flags entries that need a human: cross-reference glosses
+(`genitive of বাংলাদেশ`), definitions that just repeat the headword, and
+empty-looking definitions. The admin page has a **Review queue** mode (also
+`GET /admin/reviews`, `POST /admin/reviews/scan`,
+`POST /admin/reviews/:id/resolve`) with **Approve** / **Dismiss** / **Edit**
+actions, most frequent words first. Current local queue: ~2.6k of 82k entries.
+Editing an entry in review mode approves it automatically.

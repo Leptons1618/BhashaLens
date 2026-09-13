@@ -102,7 +102,7 @@ own lemma.
 | bdLexicon (corpus.bangla.gov.bd) | Government project terms | 954 words with lemma/POS/synonyms/translations | Small; useful for lemma validation tests. |
 | Shobdo (InanXR/Shobdo) | Apache-2.0 | 45k words with meanings, pronunciation, POS, etymology | Strong future import candidate; verify data quality first. |
 | tahmid02016/bangla-wordlist | Unlicense (public domain) | 454k bare words, no glosses | Useful as a spell/stem validation set, not as a dictionary. |
-| soumenganguly/Bangla-Wordnet | GPL-3.0 | WordNet-style synsets | Optional opt-in source if we ever want synset grouping. |
+| soumenganguly/Bangla-Wordnet | GPL-3.0 | 29.7k synsets with Bengali glosses, examples, synonyms | **Imported** (`bangla-wordnet` source): ~50k entries, cut missing coverage 41.3% → 30.1%. |
 | Universal Dependencies Bengali (if we adopt POS) | Varies | Treebanks | Future POS-aware lemmatization. |
 
 ## Action items (rules + data first)
@@ -113,23 +113,33 @@ own lemma.
   frequency. Built from the Bengali Wikipedia dump (CC BY-SA 4.0) with a
   stdlib-only Python script; the generated file stays out of git, like Kaikki.
 - [x] Mine verb root→lemma pairs from Kaikki `forms[]` into a small table so irregular
-  verbs lemmatize (`গেলাম → যাওয়া`). Result: `word_forms` (53k mappings) takes
-  precedence over rules for exact surfaces; morphology still covers unseen forms.
-- [ ] Optional: add the GPL Bangla WordNet as an opt-in source for synset grouping.
-- [ ] Add a POS tagger only when we have a frequency-backed reason to disambiguate;
-  BanLemma shows wrong POS drops accuracy from 96.7% to 85–89%.
+  verbs lemmatize (`গেলাম → যাওয়া`). Result: `word_forms` (38.5k cleaned mappings)
+  takes precedence over rules for exact surfaces; morphology still covers unseen forms.
+- [x] Optional: add the GPL Bangla WordNet as an opt-in source for synset grouping.
+  Imported ~50k entries with Bengali glosses/examples/synonyms.
+- [x] Benchmark before adding a POS model: `pnpm benchmark:lemmas` replays 38.5k
+  Wiktionary form→lemma pairs with the form table hidden. Rules find the lemma for
+  **66.5%** of non-headword forms (nominal **88.3%**, verb **26.9%**). The misses are
+  overwhelmingly irregular verbs, which the form table already covers — so a POS
+  tagger (which addresses ambiguity, not irregularity) is not the bottleneck.
+- [x] Close dictionary gaps from `report:missing`: thesaurus + WordNet + 26 curated
+  seed entries took top-20k coverage from 56.4% missing to 29.9%.
 
 ## Future ML work (when rules + data plateau)
 
-Not needed now. If we reach for a model, use open Bengali checkpoints rather than
-training from scratch:
+Not needed now. The benchmark above shows why: rules handle nearly 9 in 10
+nominal forms, and the gaps are irregular verb forms that the Wiktionary
+`word_forms` table already resolves. A POS tagger addresses *ambiguity*, not
+irregularity, so it would not move the 26.9% verb figure. If we reach for a
+model later, use open Bengali checkpoints rather than training from scratch:
 
+- **Unseen/novel forms:** a character-level lemmatizer (e.g. fine-tuned
+  BanglaT5 or a small seq2seq) trained on the 38.5k `word_forms` pairs is the
+  natural next experiment — it is a generation problem, not a tagging one.
 - **Ranking / candidate selection:** BanglaBERT (110M) fine-tuned as a
-  sentence-pair scorer, or a small fastText-based lemmatizer trained on BanLemma-style
-  data. Training on Kaggle/Colab + artifacts on HF Hub is the intended path; the
-  datasets above (BanglaLM, bdLexicon) are the inputs.
-- **Transliteration/IPA generation:** a character-level seq2seq (BanglaT5) could fill
-  missing pronunciations, but Kaikki already covers ~99% transliteration / ~76% IPA,
-  so this is not a bottleneck.
-- Guardrail: never let model output enter `dictionary_entries` directly. It goes to a
-  review queue or a clearly-labeled cache, exactly like `translation_cache`.
+  sentence-pair scorer. Training on Kaggle/Colab + artifacts on HF Hub is the
+  intended path; BanglaLM and bdLexicon are the inputs.
+- **Transliteration/IPA generation:** Kaikki already covers ~99% transliteration
+  / ~76% IPA, so this is not a bottleneck.
+- Guardrail: never let model output enter `dictionary_entries` directly. It goes
+  to the review queue or a clearly-labeled cache, exactly like `translation_cache`.

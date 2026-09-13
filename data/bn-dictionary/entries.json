@@ -4,7 +4,9 @@
     "transliteration": "bangla",
     "partOfSpeech": "noun",
     "definition": "The Bengali language; something belonging to Bengal.",
-    "synonyms": ["বাঙলা"],
+    "synonyms": [
+      "বাঙলা"
+    ],
     "source": "seed"
   },
   {
@@ -33,7 +35,9 @@
     "transliteration": "jal",
     "partOfSpeech": "noun",
     "definition": "Water.",
-    "synonyms": ["পানি"],
+    "synonyms": [
+      "পানি"
+    ],
     "source": "seed"
   },
   {
@@ -41,7 +45,9 @@
     "transliteration": "pani",
     "partOfSpeech": "noun",
     "definition": "Water.",
-    "synonyms": ["জল"],
+    "synonyms": [
+      "জল"
+    ],
     "source": "seed"
   },
   {
@@ -63,7 +69,9 @@
     "transliteration": "ghor",
     "partOfSpeech": "noun",
     "definition": "House; room; home.",
-    "synonyms": ["বাড়ি"],
+    "synonyms": [
+      "বাড়ি"
+    ],
     "source": "seed"
   },
   {
@@ -71,7 +79,9 @@
     "transliteration": "bari",
     "partOfSpeech": "noun",
     "definition": "Home; house.",
-    "synonyms": ["ঘর"],
+    "synonyms": [
+      "ঘর"
+    ],
     "source": "seed"
   },
   {
@@ -93,7 +103,9 @@
     "transliteration": "prem",
     "partOfSpeech": "noun",
     "definition": "Love; affection.",
-    "synonyms": ["ভালোবাসা"],
+    "synonyms": [
+      "ভালোবাসা"
+    ],
     "source": "seed"
   },
   {
@@ -101,7 +113,9 @@
     "transliteration": "bhalobasha",
     "partOfSpeech": "noun",
     "definition": "Love; deep affection.",
-    "synonyms": ["প্রেম"],
+    "synonyms": [
+      "প্রেম"
+    ],
     "source": "seed"
   },
   {
@@ -459,7 +473,9 @@
     "transliteration": "shonge",
     "partOfSpeech": "postposition",
     "definition": "With; together with.",
-    "synonyms": ["সাথে"],
+    "synonyms": [
+      "সাথে"
+    ],
     "source": "seed"
   },
   {
@@ -467,7 +483,9 @@
     "transliteration": "sathe",
     "partOfSpeech": "postposition",
     "definition": "With; together with.",
-    "synonyms": ["সঙ্গে"],
+    "synonyms": [
+      "সঙ্গে"
+    ],
     "source": "seed"
   },
   {
@@ -790,6 +808,188 @@
     "transliteration": "mithya",
     "partOfSpeech": "noun",
     "definition": "Falsehood; lie; false.",
+    "source": "seed"
+  },
+  {
+    "word": "বিষয়শ্রেণী",
+    "transliteration": "bishoyoshreni",
+    "partOfSpeech": "noun",
+    "definition": "Category; class; a division of things sharing a property.",
+    "source": "seed"
+  },
+  {
+    "word": "তথ্যসূত্র",
+    "transliteration": "tothyosutro",
+    "partOfSpeech": "noun",
+    "definition": "Reference; source; citation.",
+    "source": "seed"
+  },
+  {
+    "word": "শ্রেণীবিন্যাসবিদ্যা",
+    "transliteration": "shrenibinyashbidya",
+    "partOfSpeech": "noun",
+    "definition": "Taxonomy; the science of classification.",
+    "source": "seed"
+  },
+  {
+    "word": "বহিঃসংযোগ",
+    "transliteration": "bohihsongjog",
+    "partOfSpeech": "noun",
+    "definition": "External link; outbound connection.",
+    "source": "seed"
+  },
+  {
+    "word": "স্থানান্তর",
+    "transliteration": "sthanantor",
+    "partOfSpeech": "noun",
+    "definition": "Transfer; relocation; movement to another place.",
+    "source": "seed"
+  },
+  {
+    "word": "কর্তৃক",
+    "transliteration": "kortrik",
+    "partOfSpeech": "postposition",
+    "definition": "By (marks the agent in passive constructions).",
+    "source": "seed"
+  },
+  {
+    "word": "অন্তর্ভুক্ত",
+    "transliteration": "ontorbhukto",
+    "partOfSpeech": "adjective",
+    "definition": "Included; incorporated; contained.",
+    "source": "seed"
+  },
+  {
+    "word": "অনুষ্ঠিত",
+    "transliteration": "onushthito",
+    "partOfSpeech": "adjective",
+    "definition": "Held; conducted; performed (of an event).",
+    "source": "seed"
+  },
+  {
+    "word": "জন্মগ্রহণ",
+    "transliteration": "jonmogrohon",
+    "partOfSpeech": "noun",
+    "definition": "Birth; the act of being born.",
+    "source": "seed"
+  },
+  {
+    "word": "রাজনীতিবিদ",
+    "transliteration": "rajnitibid",
+    "partOfSpeech": "noun",
+    "definition": "Politician.",
+    "source": "seed"
+  },
+  {
+    "word": "পরিণত",
+    "transliteration": "porinoto",
+    "partOfSpeech": "adjective",
+    "definition": "Turned into; become; matured.",
+    "source": "seed"
+  },
+  {
+    "word": "এছাড়া",
+    "transliteration": "eshara",
+    "partOfSpeech": "adverb",
+    "definition": "Besides; moreover; in addition.",
+    "source": "seed"
+  },
+  {
+    "word": "ডিগ্রি",
+    "transliteration": "digri",
+    "partOfSpeech": "noun",
+    "definition": "Degree (academic qualification or unit of measurement).",
+    "source": "seed"
+  },
+  {
+    "word": "কর্মজীবন",
+    "transliteration": "kormojibon",
+    "partOfSpeech": "noun",
+    "definition": "Career; working life.",
+    "source": "seed"
+  },
+  {
+    "word": "তৎকালীন",
+    "transliteration": "totkalin",
+    "partOfSpeech": "adjective",
+    "definition": "Then; of that time; contemporary (at the time).",
+    "source": "seed"
+  },
+  {
+    "word": "পেশাদার",
+    "transliteration": "peshadar",
+    "partOfSpeech": "adjective",
+    "definition": "Professional; engaged in a profession.",
+    "source": "seed"
+  },
+  {
+    "word": "ভিত্তিক",
+    "transliteration": "bhittik",
+    "partOfSpeech": "adjective",
+    "definition": "Based on; founded on; -based.",
+    "source": "seed"
+  },
+  {
+    "word": "অন্যদিকে",
+    "transliteration": "onnodike",
+    "partOfSpeech": "adverb",
+    "definition": "On the other hand; on the other side.",
+    "source": "seed"
+  },
+  {
+    "word": "বয়সী",
+    "transliteration": "boyosi",
+    "partOfSpeech": "adjective",
+    "definition": "Aged; of the age of.",
+    "source": "seed"
+  },
+  {
+    "word": "সেনাবাহিনী",
+    "transliteration": "senabahini",
+    "partOfSpeech": "noun",
+    "definition": "Army; military force.",
+    "source": "seed"
+  },
+  {
+    "word": "জয়লাভ",
+    "transliteration": "joylabh",
+    "partOfSpeech": "noun",
+    "definition": "Victory; winning; achievement of success.",
+    "source": "seed"
+  },
+  {
+    "word": "আনুষ্ঠানিকভাবে",
+    "transliteration": "anushthanikbhabe",
+    "partOfSpeech": "adverb",
+    "definition": "Officially; formally.",
+    "source": "seed"
+  },
+  {
+    "word": "এসব",
+    "transliteration": "eshob",
+    "partOfSpeech": "pronoun",
+    "definition": "These; these things.",
+    "source": "seed"
+  },
+  {
+    "word": "বৃহৎ",
+    "transliteration": "brihot",
+    "partOfSpeech": "adjective",
+    "definition": "Large; great; big.",
+    "source": "seed"
+  },
+  {
+    "word": "পর্ব",
+    "transliteration": "porbo",
+    "partOfSpeech": "noun",
+    "definition": "Part; episode; chapter; festival (parva).",
+    "source": "seed"
+  },
+  {
+    "word": "প্রথমবার",
+    "transliteration": "prothombar",
+    "partOfSpeech": "adverb",
+    "definition": "For the first time.",
     "source": "seed"
   }
 ]

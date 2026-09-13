@@ -34,7 +34,7 @@ export const ADMIN_PAGE = `<!DOCTYPE html>
   #search { flex: 1; min-width: 220px; }
   .grow { flex: 1; }
   button {
-    background: #271b12; border: 0; color: #fffaf0; cursor: pointer; font-weight: 700; padding: 9px 14px;
+    background: #271b12; border: 0; color: #fffaf0; cursor: pointer; font-weight: 700; padding: 9px 14px; white-space: nowrap;
   }
   button.secondary { background: rgba(39, 27, 18, 0.08); color: #4a3526; }
   button.danger { background: transparent; color: #9f2d20; border: 1px solid rgba(159, 45, 32, 0.3); padding: 6px 10px; }
@@ -86,13 +86,21 @@ export const ADMIN_PAGE = `<!DOCTYPE html>
   <div class="toolbar">
     <input id="search" type="search" placeholder="Search word, transliteration, or definition…" />
     <select id="sourceFilter"><option value="">All sources</option></select>
+    <select id="ruleFilter" style="display:none">
+      <option value="">All review rules</option>
+      <option value="cross-reference gloss">Cross-reference gloss</option>
+      <option value="definition repeats headword">Repeats headword</option>
+      <option value="empty-looking definition">Empty-looking definition</option>
+    </select>
+    <button class="ghost" id="reviewBtn">Review queue</button>
+    <button class="ghost" id="scanBtn" style="display:none">Rescan</button>
     <button id="addBtn">+ Add entry</button>
   </div>
 
   <table>
     <thead>
       <tr>
-        <th>Word</th><th>Translit</th><th>IPA</th><th>POS</th><th>Definition</th><th>Source</th><th></th>
+        <th>Word</th><th>Translit</th><th id="thNote">IPA</th><th>POS</th><th>Definition</th><th>Source</th><th></th>
       </tr>
     </thead>
     <tbody id="rows"></tbody>
@@ -144,7 +152,7 @@ export const ADMIN_PAGE = `<!DOCTYPE html>
 
 <script>
 (function () {
-  var state = { q: "", source: "", limit: 25, offset: 0, total: 0, editingId: null };
+  var state = { q: "", source: "", rule: "", mode: "entries", limit: 25, offset: 0, total: 0, editingId: null };
   var $ = function (id) { return document.getElementById(id); };
 
   function token() { return $("token").value.trim(); }
@@ -203,7 +211,7 @@ export const ADMIN_PAGE = `<!DOCTYPE html>
       var tr = document.createElement("tr");
       tr.appendChild(cell(e.word, "word"));
       tr.appendChild(cell(e.transliteration, "mono"));
-      tr.appendChild(cell(e.ipa, "mono"));
+      tr.appendChild(cell(state.mode === "reviews" ? e.reviewNote : e.ipa, "mono"));
       tr.appendChild(cell(e.partOfSpeech));
       tr.appendChild(cell(e.definition, "def"));
       var srcTd = document.createElement("td");
@@ -214,6 +222,10 @@ export const ADMIN_PAGE = `<!DOCTYPE html>
       tr.appendChild(srcTd);
       var actions = document.createElement("td");
       actions.className = "actions";
+      if (state.mode === "reviews") {
+        actions.appendChild(actionButton("Approve", "ghost", function () { resolveReview(e, "approved"); }));
+        actions.appendChild(actionButton("Dismiss", "ghost", function () { resolveReview(e, "dismissed"); }));
+      }
       actions.appendChild(actionButton("Edit", "ghost", function () { openModal(e); }));
       actions.appendChild(actionButton("Delete", "danger", function () { removeEntry(e); }));
       tr.appendChild(actions);
@@ -242,11 +254,51 @@ export const ADMIN_PAGE = `<!DOCTYPE html>
     }).catch(function (err) { showError(err.message); });
   }
 
+  function loadReviews() {
+    var params = new URLSearchParams();
+    if (state.rule) { params.set("rule", state.rule); }
+    params.set("limit", String(state.limit));
+    params.set("offset", String(state.offset));
+    api("/admin/reviews?" + params.toString()).then(function (res) {
+      state.total = res.total;
+      renderTable(res.entries);
+      updatePager(res.entries.length);
+    }).catch(function (err) { showError(err.message); });
+  }
+
+  function load() {
+    if (state.mode === "reviews") { loadReviews(); } else { loadEntries(); }
+  }
+
+  function setMode(mode) {
+    state.mode = mode;
+    state.offset = 0;
+    var reviews = mode === "reviews";
+    $("thNote").textContent = reviews ? "Note" : "IPA";
+    $("ruleFilter").style.display = reviews ? "" : "none";
+    $("scanBtn").style.display = reviews ? "" : "none";
+    $("search").style.display = reviews ? "none" : "";
+    $("sourceFilter").style.display = reviews ? "none" : "";
+    $("reviewBtn").textContent = reviews ? "← All entries" : "Review queue";
+    load();
+    loadSources();
+  }
+
+  function resolveReview(entry, status) {
+    api("/admin/reviews/" + entry.id + "/resolve", {
+      method: "POST",
+      body: JSON.stringify({ status: status })
+    }).then(function () {
+      load();
+      loadSources();
+    }).catch(function (err) { showError(err.message); });
+  }
+
   function loadSources() {
     api("/admin/sources").then(function (res) {
       var counts = res.counts || [];
       var total = counts.reduce(function (sum, c) { return sum + (c.count || 0); }, 0);
-      $("stats").textContent = total + " entries across " + counts.length + " sources";
+      $("stats").textContent = total + " entries across " + counts.length + " sources · " + (res.flagged || 0) + " flagged for review";
       var sel = $("sourceFilter");
       sel.innerHTML = "";
       var all = document.createElement("option");
@@ -298,9 +350,14 @@ export const ADMIN_PAGE = `<!DOCTYPE html>
     var editing = state.editingId;
     var path = editing ? "/admin/entries/" + editing : "/admin/entries";
     api(path, { method: editing ? "PUT" : "POST", body: JSON.stringify(body) }).then(function () {
-      closeModal();
-      loadEntries();
-      loadSources();
+      var after = editing && state.mode === "reviews"
+        ? api("/admin/reviews/" + editing + "/resolve", { method: "POST", body: JSON.stringify({ status: "approved" }) })
+        : Promise.resolve();
+      return after.then(function () {
+        closeModal();
+        load();
+        loadSources();
+      });
     }).catch(function (err) {
       var fe = $("formError");
       fe.textContent = err.message;
@@ -311,7 +368,7 @@ export const ADMIN_PAGE = `<!DOCTYPE html>
   function removeEntry(entry) {
     if (!window.confirm("Delete \\"" + entry.word + "\\" (" + entry.partOfSpeech + ")?")) { return; }
     api("/admin/entries/" + entry.id, { method: "DELETE" }).then(function () {
-      loadEntries();
+      load();
       loadSources();
     }).catch(function (err) { showError(err.message); });
   }
@@ -323,35 +380,49 @@ export const ADMIN_PAGE = `<!DOCTYPE html>
     searchTimer = setTimeout(function () {
       state.q = value.trim();
       state.offset = 0;
-      loadEntries();
+      load();
     }, 250);
   });
   $("sourceFilter").addEventListener("change", function (e) {
     state.source = e.target.value;
     state.offset = 0;
-    loadEntries();
+    load();
   });
   $("prevBtn").addEventListener("click", function () {
     state.offset = Math.max(0, state.offset - state.limit);
-    loadEntries();
+    load();
   });
   $("nextBtn").addEventListener("click", function () {
     state.offset = state.offset + state.limit;
-    loadEntries();
+    load();
   });
   $("addBtn").addEventListener("click", function () { openModal(null); });
+  $("reviewBtn").addEventListener("click", function () {
+    setMode(state.mode === "reviews" ? "entries" : "reviews");
+  });
+  $("scanBtn").addEventListener("click", function () {
+    api("/admin/reviews/scan", { method: "POST" }).then(function () {
+      load();
+      loadSources();
+    }).catch(function (err) { showError(err.message); });
+  });
+  $("ruleFilter").addEventListener("change", function (e) {
+    state.rule = e.target.value;
+    state.offset = 0;
+    load();
+  });
   $("cancelBtn").addEventListener("click", closeModal);
   $("saveBtn").addEventListener("click", save);
   $("overlay").addEventListener("click", function (e) { if (e.target === $("overlay")) { closeModal(); } });
   $("token").addEventListener("change", function () {
     localStorage.setItem("bl_admin_token", token());
     loadSources();
-    loadEntries();
+    load();
   });
 
   $("token").value = localStorage.getItem("bl_admin_token") || "";
   loadSources();
-  loadEntries();
+  load();
 })();
 </script>
 </body>
